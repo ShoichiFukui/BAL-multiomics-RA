@@ -1,0 +1,43 @@
+# R packages used in the analysis pipeline
+# (R >= 4.3 recommended; tested on macOS / Linux)
+#
+# To install all CRAN + Bioconductor packages, run scripts/install_dependencies.R
+
+# --- CRAN ---
+tidyverse                # data wrangling and plotting (includes ggplot2, dplyr, tibble, tidyr, readr, purrr)
+patchwork                # composing ggplot2 figures
+ggrepel                  # non-overlapping labels in ggplot2
+pheatmap                 # heatmaps
+corrplot                 # correlation plots
+gridExtra                # grid layouts
+openxlsx                 # read/write Excel
+readxl                   # read Excel
+pROC                     # ROC analysis
+randomForest             # random forest classifier
+caret                    # cross-validation utilities
+glmnet                   # penalized regression
+effsize                  # Cliff's delta effect size
+vegan                    # PERMANOVA, microbiome diversity metrics
+future                   # parallelization
+reticulate               # R <-> Python bridge (used by MOFA2 and BayesPrism)
+hdf5r                    # HDF5 file I/O
+devtools                 # for installing GitHub packages
+
+# --- Bioconductor (install via BiocManager::install) ---
+BiocManager
+DESeq2                   # differential expression
+apeglm                   # log fold-change shrinkage
+edgeR                    # alternative DEG (validation)
+clusterProfiler          # pathway enrichment
+AnnotationDbi
+org.Hs.eg.db             # human gene annotations
+biomaRt                  # gene ID mapping
+GSVA                     # gene set variation analysis
+SingleCellExperiment
+
+# --- GitHub / specialized ---
+Seurat                   # scRNA-seq (CRAN; Seurat v4)
+harmony                  # batch integration (CRAN; immunogenomics/harmony)
+MOFA2                    # multi-omics factor analysis (Bioconductor; reticulate-based Python backend)
+BayesPrism               # bulk RNA-seq deconvolution (https://github.com/Danko-Lab/BayesPrism)
+fgsea                    # fast GSEA (Bioconductor)

@@ -1,0 +1,19 @@
+# Python dependencies for the CT GMM tissue-classification pipeline
+# (scripts/CT_GMM/lung_gmm_batch_v3_FINAL.py)
+#
+# Tested with Python 3.10 on macOS. Versions listed below are the versions
+# used in the manuscript analyses; relaxing the version pins should generally
+# work but is not validated.
+
+numpy>=1.24
+scipy>=1.10
+scikit-learn==0.23.2     # GMM model parameters tuned for this version (Zaffino et al. 2021)
+SimpleITK>=2.2
+pydicom>=2.3
+lungmask>=0.2.16         # AI lung segmentation (U-net R231); requires PyTorch
+torch>=1.13
+matplotlib>=3.6
+
+# For optional interactive notebook (scripts/CT_GMM/lung_gmm_interactive.ipynb):
+#   3D Slicer ≥ 5.x
+#   SlicerDensityLungSegmentation extension (https://github.com/pzaffino/SlicerDensityLungSegmentation)
