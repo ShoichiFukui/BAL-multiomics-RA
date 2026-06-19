@@ -61,7 +61,7 @@ compare_inf <- function(vals_pos, vals_neg, variable, category) {
              P_value=wt$p.value, Cliff_delta=cd$estimate, Magnitude=cd$magnitude)
 }
 
-# 1a. Cytokines (BALF + Serum) — prefixを保持して区別
+# 1a. Cytokines (BALF + Serum) — prefix retained to distinguish compartments
 cyto_cols <- grep("^BALF_|^Serum_", colnames(ra_inf_c), value=TRUE)
 cyto_cols <- cyto_cols[!grepl("Treg|Th1|Th2|Th17|Macro|Neutro|Lympho|Eosin|Baso|Plasma_Cell|CD[0-9]|Percent|Activated|Ratio|CD14|CD86|CD66", cyto_cols)]
 cat(sprintf("  Cytokine columns: BALF=%d, Serum=%d\n",
@@ -283,7 +283,7 @@ expr_vars_inf <- apply(expr_inf, 2, var, na.rm=TRUE)
 top_expr <- names(sort(expr_vars_inf, decreasing=TRUE))[1:min(100, sum(!is.na(expr_vars_inf)))]
 feature_blocks$Expression <- as.data.frame(expr_inf[, top_expr])
 
-# Cytokines — master_dataから直接取得（BALF/Serum prefix保持）
+# Cytokines — taken directly from master_data (BALF/Serum prefix retained)
 cyto_cols_feat <- grep("^BALF_|^Serum_", colnames(ra_inf_c), value=TRUE)
 cyto_cols_feat <- cyto_cols_feat[!grepl("Treg|Th1|Th2|Th17|Macro|Neutro|Lympho|Eosin|Baso|Plasma_Cell|CD[0-9]|Percent|Activated|Ratio|CD14|CD86|CD66", cyto_cols_feat)]
 cyto_feat <- ra_inf_c[match(ra_common, ra_inf_c$Sample_ID), cyto_cols_feat]
@@ -292,7 +292,7 @@ cyto_feat <- log2(cyto_feat + 1)
 rownames(cyto_feat) <- ra_common
 feature_blocks$Cytokines <- cyto_feat
 
-# FACS — master_dataから直接取得（BALF/PB prefix保持）
+# FACS — taken directly from master_data (BALF/PB prefix retained)
 facs_cols_feat <- grep("^BALF_.*Treg|^BALF_.*Th|^BALF_.*Macro|^BALF_.*Activated|^BALF_.*Neutro.*CD|^PB_", colnames(ra_inf_c), value=TRUE)
 facs_feat <- ra_inf_c[match(ra_common, ra_inf_c$Sample_ID), facs_cols_feat]
 for(col in colnames(facs_feat)) facs_feat[[col]] <- as.numeric(facs_feat[[col]])

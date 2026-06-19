@@ -1,7 +1,9 @@
 #!/usr/bin/env Rscript
 # 05_MOFA2_RA_only.R — RA-only MOFA2 for infection + CT progression
 library(reticulate)
-use_python("/tmp/mofa_venv/bin/python3", required = TRUE)
+# Set MOFA2_PYTHON to the python interpreter that has 'mofapy2' installed.
+mofa_python <- Sys.getenv("MOFA2_PYTHON", unset = "")
+if (nzchar(mofa_python)) use_python(mofa_python, required = TRUE)
 library(readxl); library(tidyverse); library(ggplot2); library(pROC)
 library(MOFA2); library(patchwork)
 if (!exists("BASEDIR")) BASEDIR <- getwd()

@@ -1,42 +1,36 @@
 # =====================================
-# RA-ILD BAL Deconvolution 改善版 v3
+# RA-ILD BAL Deconvolution v3
 # Author Annotation + BayesPrism Deconvolution
-# FCM バリデーション付き
+# with FCM validation
 # Version 3.0
 # =====================================
 #
-# 【v2からの主要な改善点】
-# 1. アノテーション: AddModuleScore + which.max → 原著者peer-reviewedアノテーション活用
-#    - 各公開scRNA-seqデータセットの原著者cell type annotationを使用
-#    - アノテーションのないデータセットのみBAL特異的canonical markerで分類
-#    - Macrophageサブタイプ: FABP4/MARCO (Alveolar) vs FCN1/CD14 (Monocyte-derived)
-# 2. Deconvolution: MuSiC + NNLS → BayesPrism (Bayesianモデル, プラットフォーム差補正内蔵)
-# 3. FCMバリデーション: Macrophage/Lymphocyte/Neutrophil相関を自動計算
-# 4. QC強化: canonical marker検証, リファレンス品質チェック
+# Pipeline overview:
+# - Annotation: uses peer-reviewed cell type annotations from the original
+#   publications of each public scRNA-seq dataset; datasets without annotation
+#   are classified with BAL-specific canonical markers.
+#   Macrophage subtypes: FABP4/MARCO (Alveolar) vs FCN1/CD14 (Monocyte-derived).
+# - Deconvolution: BayesPrism (Bayesian model with built-in platform correction).
+# - FCM validation: Macrophage/Lymphocyte/Neutrophil correlations computed automatically.
+# - QC: canonical marker validation and reference quality checks.
 #
-# 【査読防御ポイント】
-# - リファレンスアノテーション: "Cell type annotations from original publications
-#   (Liao et al. Nat Med 2020; etc.) were used as provided by the authors"
-# - リファレンスミスマッチの批判を完全に回避
-# - BAL液由来scRNA-seq × 3データセットのみ使用
-#
-# 【必要パッケージ（事前インストール）】
+# Required packages (install beforehand):
 # install.packages("devtools")
 # devtools::install_github("Danko-Lab/BayesPrism/BayesPrism")
 # BiocManager::install("SingleCellExperiment")
 # =====================================
 
 # =====================================
-# 初期設定
+# Initial setup
 # =====================================
 
-# 一時ディレクトリ設定（デフォルト/var/folders/が容量不足の場合の対策）
+# Temporary directory (workaround when default /var/folders/ runs out of space)
 tmp_dir <- file.path(getwd(), "tmp_R")
 dir.create(tmp_dir, showWarnings = FALSE, recursive = TRUE)
 Sys.setenv(TMPDIR = tmp_dir)
 options(
   future.globals.maxSize = 16000 * 1024^2,
-  bitmapType = "cairo"  # Quartz代替（Quartz一時ファイルエラー回避）
+  bitmapType = "cairo"  # Quartz alternative (avoids Quartz temp file errors)
 )
 
 library(Seurat)
@@ -53,13 +47,16 @@ library(future)
 
 plan("sequential")
 
-# 作業ディレクトリ設定
+# Working directory
 if (!exists("BASEDIR")) BASEDIR <- getwd()
 setwd(BASEDIR)
 
-# 出力ディレクトリ
+# Output directory
 output_dir <- "./output_v3_BayesPrism"
 dir.create(output_dir, showWarnings = FALSE)
+
+# Data directory (reference annotation files, etc.)
+data_dir <- "."
 
 cat("\n")
 cat("╔══════════════════════════════════════════════════════════════╗\n")
@@ -68,11 +65,11 @@ cat("║  Author Annotation + BayesPrism Deconvolution               ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
 # =====================================
-# PART 1: GSE145926 (COVID-19 BALF) データ読み込み
+# PART 1: Load GSE145926 (COVID-19 BALF) data
 # =====================================
 
 cat("╔══════════════════════════════════════════════════════════════╗\n")
-cat("║  PART 1: GSE145926 COVID-19 BALF データ読み込み             ║\n")
+cat("║  PART 1: Load GSE145926 COVID-19 BALF data                  ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
 covid_processed_path <- "./output_integrated/GSE145926_COVID_processed.rds"
@@ -86,7 +83,7 @@ if (file.exists(covid_processed_path)) {
     covid_seurat$sample_id <- covid_seurat$sample
   }
   
-  # v2で付与されたcelltypeを保存（後で原著者アノテーションと比較用）
+  # Preserve any pre-existing celltype (for later comparison with author annotation)
   if ("celltype" %in% colnames(covid_seurat@meta.data)) {
     covid_seurat$celltype_v2 <- covid_seurat$celltype
     covid_seurat$celltype <- NULL
@@ -149,7 +146,7 @@ if (file.exists(covid_processed_path)) {
                          subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 20)
   cat(sprintf("After QC: %d cells\n", ncol(covid_seurat)))
   
-  # 前処理
+  # Preprocessing
   covid_seurat <- NormalizeData(covid_seurat, verbose = FALSE)
   covid_seurat <- FindVariableFeatures(covid_seurat, nfeatures = 3000, verbose = FALSE)
   covid_seurat <- ScaleData(covid_seurat, verbose = FALSE)
@@ -173,9 +170,9 @@ cat("╔════════════════════════
 cat("║  PART 2: GSE193782 (Healthy BAL)                            ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-# --- メモリ節約版読み込み ---
-# GSE193782はADT/ITG/SCT等の巨大アッセイを含むため、
-# 軽量化済みRDSがあればそれを使い、なければ元ファイルを読み込んで即座に軽量化する
+# --- Memory-efficient loading ---
+# GSE193782 contains large assays (ADT/ITG/SCT). Use a pre-trimmed lite RDS if
+# available; otherwise load the original file and trim it immediately.
 
 healthy_lite_path <- "./output_v3_BayesPrism/GSE193782_lite.rds"
 
@@ -191,12 +188,12 @@ if (file.exists(healthy_lite_path)) {
   cat("    Option B: R --max-vsize=128G -f this_script.R\n")
   cat("    Option C: Manually extract RNA counts from the RDS (see below)\n\n")
   
-  # まず直接読み込みを試みる
+  # First try a direct read
   healthy_seurat <- tryCatch({
     obj <- readRDS("./analysis/GSE193782_SeuratObject.rds")
     cat(sprintf("Original: %d cells\n", ncol(obj)))
-    
-    # 即座に不要アッセイを削除してメモリ解放
+
+    # Immediately drop unneeded assays to free memory
     DefaultAssay(obj) <- "RNA"
     for (assay_name in c("ADT", "ITG", "SCT")) {
       if (assay_name %in% names(obj@assays)) {
@@ -218,18 +215,18 @@ if (file.exists(healthy_lite_path)) {
     cat(sprintf("\n⚠ Direct loading failed: %s\n", e$message))
     cat("  Attempting alternative extraction via connection streaming...\n\n")
     
-    # 代替方法: connection経由でRDS内のRNA countsだけを抽出
-    # R内部でunserializeを使い、読み込み中にGC可能にする
+    # Alternative: extract only the RNA counts from the RDS via a connection,
+    # allowing GC during read
     con <- gzcon(file("./analysis/GSE193782_SeuratObject.rds", "rb"))
     obj <- tryCatch({
       readRDS(con)
     }, error = function(e2) {
       close(con)
       stop(paste0(
-        "メモリ不足でGSE193782を読み込めません。以下を実行してください:\n",
-        "  1. ターミナルで: echo 'R_MAX_VSIZE=128Gb' >> ~/.Renviron\n",
-        "  2. R/RStudioを再起動\n",
-        "  3. スクリプトを再実行\n",
+        "Out of memory loading GSE193782. Please do the following:\n",
+        "  1. In a terminal: echo 'R_MAX_VSIZE=128Gb' >> ~/.Renviron\n",
+        "  2. Restart R/RStudio\n",
+        "  3. Re-run the script\n",
         "  Original error: ", e2$message
       ))
     })
@@ -244,7 +241,7 @@ if (file.exists(healthy_lite_path)) {
     obj
   })
   
-  # サブサンプリング（メモリ節約のため先に実施）
+  # Subsample (done first to save memory)
   target_healthy <- 20000
   if (ncol(healthy_seurat) > target_healthy) {
     set.seed(123)
@@ -254,7 +251,7 @@ if (file.exists(healthy_lite_path)) {
   }
   gc()
   
-  # 軽量版を保存（次回から高速読み込み可能）
+  # Save lite version (enables fast loading next time)
   cat("  Saving lightweight version for future use...\n")
   dir.create(dirname(healthy_lite_path), showWarnings = FALSE)
   saveRDS(healthy_seurat, healthy_lite_path)
@@ -318,7 +315,7 @@ rm(sarcoid_list); gc()
 cat(sprintf("\n✓ Sarcoidosis: %d cells\n", ncol(sarcoid_merged)))
 
 # =====================================
-# PART 4: 3データセット統合
+# PART 4: Merge 3 datasets
 # =====================================
 
 cat("\n")
@@ -351,7 +348,7 @@ cat(sprintf("\n✓ Total: %d cells × %d genes\n", ncol(reference_obj), nrow(ref
 print(table(reference_obj$dataset))
 
 # =====================================
-# PART 5: QCフィルタリング
+# PART 5: QC filtering
 # =====================================
 
 cat("\n")
@@ -372,7 +369,7 @@ cat(sprintf("After QC: %d cells\n", ncol(reference_obj)))
 gc()
 
 # =====================================
-# PART 6: 正規化・次元削減・Harmony統合
+# PART 6: Normalization, dimensionality reduction, Harmony integration
 # =====================================
 
 cat("\n")
@@ -392,7 +389,7 @@ cat("✓ Scaling\n")
 reference_obj <- RunPCA(reference_obj, npcs = 50, verbose = FALSE)
 cat("✓ PCA\n")
 
-# Harmony batch correction（可視化用、deconvolutionには使わない）
+# Harmony batch correction (for visualization; not used for deconvolution)
 reference_obj <- RunHarmony(reference_obj, "dataset", verbose = TRUE)
 cat("✓ Harmony completed\n")
 
@@ -402,41 +399,40 @@ reference_obj <- FindClusters(reference_obj, resolution = 0.8, verbose = FALSE)
 cat("✓ Clustering & UMAP (Harmony-corrected)\n")
 cat(sprintf("  Clusters: %d\n", length(unique(reference_obj$seurat_clusters))))
 
-# レイヤー結合（Seurat v5対応）
+# Join layers (Seurat v5)
 reference_obj <- JoinLayers(reference_obj)
 cat("✓ Layers joined\n")
 gc()
 
 # =====================================
-# PART 7: 原著者アノテーション活用（改善ポイント①）
+# PART 7: Author annotation
 # =====================================
-# 
-# 【戦略】査読で最も堅実なアプローチ:
-#   各公開データセットの原著者（peer-reviewed）アノテーションを直接使用
-#   → "Cell type labels from the original publications were used"
-#   → リファレンスミスマッチ批判を完全に回避
 #
-# 【フォールバック】原著者アノテーションがメタデータにない場合のみ:
-#   BAL液canonical marker遺伝子によるスコアリング分類
+# Strategy: use the peer-reviewed cell type annotations from each public
+#   dataset's original publication directly
+#   ("Cell type labels from the original publications were used"),
+#   avoiding reference-mismatch criticism.
+#
+# Fallback (only when author annotation is absent from metadata):
+#   scoring-based classification using BAL canonical marker genes.
 #
 # =====================================
 
 cat("\n")
 cat("╔══════════════════════════════════════════════════════════════╗\n")
 cat("║  PART 7: Cell Type Annotation                                ║\n")
-cat("║  原著者peer-reviewedアノテーション + canonical marker検証    ║\n")
-cat("║  (v2の AddModuleScore+which.max から大幅改善)                ║\n")
+cat("║  Author peer-reviewed annotation + canonical marker check    ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-# ===== v2パイプライン由来の列を物理削除 =====
-# PART 2-6で作成・引き継がれたv2由来の列がメタデータに残っている場合、
-# アノテーション検索で誤検出される。ここで完全に削除する。
+# ===== Remove leftover columns from any prior pipeline =====
+# Columns carried over from a previous run can be falsely matched during
+# annotation lookup, so remove them completely here.
 v2_remove_cols <- c("celltype", "celltype_v2", "celltype_fine",
                     "Neutrophil_score1", "Alveolar_Mac_score1",
                     "Monocyte_Mac_score1", "T_cell_score1",
                     "NK_score1", "B_cell_score1", "Epithelial_score1")
 
-cat("Removing v2 pipeline artifact columns...\n")
+cat("Removing leftover pipeline artifact columns...\n")
 for (col_name in v2_remove_cols) {
   if (col_name %in% colnames(reference_obj@meta.data)) {
     reference_obj@meta.data[[col_name]] <- NULL
@@ -444,14 +440,14 @@ for (col_name in v2_remove_cols) {
   }
 }
 
-# 新しいアノテーション列を初期化（NA状態から開始）
+# Initialize fresh annotation columns (start from NA)
 reference_obj$celltype <- NA_character_
 reference_obj$annotation_source <- NA_character_
 reference_obj$original_author_label <- NA_character_
 cat("  ✓ Initialized clean annotation columns\n\n")
 
-# --- 7a: BAL液canonical marker遺伝子の定義 & 統一マッピング関数 ---
-# 原著者アノテーション適用前に必要な関数・定数を定義
+# --- 7a: Define canonical BAL marker genes & harmonization function ---
+# Define functions/constants needed before applying author annotations
 
 cat("=== Preparatory: Define canonical BAL marker genes & harmonization function ===\n\n")
 
@@ -467,7 +463,7 @@ bal_markers <- list(
   Mast        = c("TPSAB1", "TPSB2", "CPA3", "KIT", "HDC")
 )
 
-# Macrophageサブタイプマーカー
+# Macrophage subtype markers
 mac_subtype_markers <- list(
   Alveolar_Mac    = c("FABP4", "MARCO", "MRC1", "PPARG", "MCEMP1"),
   Monocyte_Mac    = c("FCN1", "CD14", "S100A12", "VCAN", "CCR2")
@@ -480,23 +476,23 @@ for (ct in names(bal_markers)) {
 }
 cat("\n")
 
-# --- harmonize_celltype: 統一ラベルマッピング関数 ---
-# 各データセットの原著者ラベルをBAL deconvolution用の統一ラベルにマッピング
+# --- harmonize_celltype: label harmonization function ---
+# Map each dataset's author labels to unified labels for BAL deconvolution
 
 harmonize_celltype <- function(label) {
   label <- as.character(label)
-  
+
   result <- case_when(
-    # === GSE193782 Cell.Types 固有ラベル（優先度最高）===
-    # AMs = Alveolar Macrophages（BAL液の主要構成細胞）
+    # === GSE193782 Cell.Types specific labels (highest priority) ===
+    # AMs = Alveolar Macrophages (major BAL cell population)
     grepl("^AMs$|^AMs\\.", label) ~ "Macrophage",
     # FOLR2.IMs = FOLR2+ Interstitial Macrophages
     grepl("FOLR2\\.IMs|^IMs$", label) ~ "Macrophage",
-    # Cyc.Mye = Cycling Myeloid cells（増殖中のマクロファージ系）
+    # Cyc.Mye = Cycling Myeloid cells (proliferating macrophage lineage)
     grepl("Cyc\\.Mye", label) ~ "Macrophage",
     # Cyc.Lym = Cycling Lymphocytes
     grepl("Cyc\\.Lym", label) ~ "T_cell",
-    # Lym = Lymphocytes（BAL液ではT cell優位）
+    # Lym = Lymphocytes (T cell predominant in BAL)
     grepl("^Lym$", label) ~ "T_cell",
     # Mig.DCs = Migratory DCs
     grepl("Mig\\.DCs|^DC1$|^DC2$", label) ~ "DC",
@@ -504,9 +500,9 @@ harmonize_celltype <- function(label) {
     grepl("^Epi$", label) ~ "Epithelial",
     # Mono = Monocytes
     grepl("^Mono$|^Mono\\.", label) ~ "Macrophage",
-    
-    # === 一般的なラベル（GSE145926 v2, GSE184735 marker等）===
-    # Macrophage系（BAL最重要）
+
+    # === General labels (GSE145926, GSE184735 marker labels, etc.) ===
+    # Macrophage lineage (most important in BAL)
     grepl("Macrophage|macrophage|Macro|MΦ|Alveolar.Mac|Alveolar_Mac|Mono.Mac|Monocyte_Mac|AM$|MDM$|BALF.Mac",
           label, ignore.case = TRUE) ~ "Macrophage",
     grepl("^Monocyte|^monocyte|^CD14.Mono|^CD16.Mono|^cMono|^ncMono|^intMono",
@@ -550,14 +546,14 @@ harmonize_celltype <- function(label) {
 }
 
 
-# --- 7b: 原著者アノテーションの取得と適用 ---
+# --- 7b: Load and apply original-author annotations ---
 cat("=== Step 1: Loading author annotations ===\n\n")
 
 # =====================================================================
-# GSE145926: Liao et al. Nature Medicine 2020 の原著者アノテーション
-# ソース: https://github.com/zhangzlab/covid_balf/
-#   - all.cell.annotation.meta.txt（全細胞タイプ）
-#   - myeloid.cell.annotation.meta.txt（マクロファージサブタイプ）
+# GSE145926: author annotation from Liao et al. Nature Medicine 2020
+# Source: https://github.com/zhangzlab/covid_balf/
+#   - all.cell.annotation.meta.txt (all cell types)
+#   - myeloid.cell.annotation.meta.txt (macrophage subtypes)
 # =====================================================================
 
 liao_annotation_path <- file.path(data_dir, "reference", "GSE145926_all_cell_annotation.txt")
@@ -571,37 +567,37 @@ if (file.exists(liao_annotation_path)) {
   cat("  Author cell types:\n")
   print(table(liao_meta$celltype))
   
-  # バーコードマッチングキーの作成
+  # Build barcode matching key
   # Liao: ID = "AAACCTGAGACACTAA_1", sample_new = "HC1"
-  #   → key = "HC1_AAACCTGAGACACTAA"
-  liao_barcode <- gsub("_[0-9]+$", "", liao_meta$ID)  # "_1" サフィックス除去
+  #   -> key = "HC1_AAACCTGAGACACTAA"
+  liao_barcode <- gsub("_[0-9]+$", "", liao_meta$ID)  # strip "_1" suffix
   liao_key <- paste0(liao_meta$sample_new, "_", liao_barcode)
   liao_meta$match_key <- liao_key
-  
-  # v2 RDS: barcode = "COVID_M1_AAACCTGAGATGTCGG-1"
-  #   → key = "M1_AAACCTGAGATGTCGG"
+
+  # RDS barcode = "COVID_M1_AAACCTGAGATGTCGG-1"
+  #   -> key = "M1_AAACCTGAGATGTCGG"
   covid_cells <- which(reference_obj$dataset == "GSE145926")
   covid_barcodes <- colnames(reference_obj)[covid_cells]
   
-  # "COVID_{sample}_{barcode}-{N}" → "{sample}_{barcode}"
+  # "COVID_{sample}_{barcode}-{N}" -> "{sample}_{barcode}"
   rds_key <- gsub("^COVID_", "", covid_barcodes)           # "M1_AAACCTGAGATGTCGG-1"
   rds_key <- gsub("-[0-9]+$", "", rds_key)                 # "M1_AAACCTGAGATGTCGG"
-  
-  # マッチング実行
+
+  # Run matching
   match_idx <- match(rds_key, liao_meta$match_key)
   n_matched <- sum(!is.na(match_idx))
   cat(sprintf("\n  Barcode matching: %d / %d matched (%.1f%%)\n",
               n_matched, length(covid_cells), n_matched / length(covid_cells) * 100))
   
   if (n_matched > 0) {
-    # マッチした細胞にLiao et al.アノテーションを適用
+    # Apply Liao et al. annotation to matched cells
     matched_mask <- !is.na(match_idx)
     matched_labels <- liao_meta$celltype[match_idx[matched_mask]]
-    
+
     reference_obj$original_author_label[covid_cells[matched_mask]] <- as.character(matched_labels)
     reference_obj$annotation_source[covid_cells[matched_mask]] <- "author_Liao2020"
-    
-    # Liao et al.ラベル → 統一BALラベルにマッピング
+
+    # Map Liao et al. labels -> unified BAL labels
     # Liao labels: Macrophages, T, NK, B, Neutrophil, mDC, pDC, Epithelial, Mast, Plasma
     liao_harmonize <- function(label) {
       case_when(
@@ -628,9 +624,9 @@ if (file.exists(liao_annotation_path)) {
       cat(sprintf("    %-20s → %-15s (n=%d)\n", orig, mapped, n))
     }
     
-    # マッチしなかった細胞の処理
-    # Liao et al.のQC基準で除外された細胞と考えられるため、リファレンスから除外
-    # (原著者の品質管理基準を適用 — cherry-pickingではない)
+    # Handle unmatched cells
+    # Likely QC-filtered by Liao et al., so exclude from the reference
+    # (applying the original authors' quality standards, not cherry-picking)
     unmatched_cells <- covid_cells[!matched_mask]
     if (length(unmatched_cells) > 0) {
       cat(sprintf("\n  Excluding %d unmatched GSE145926 cells (not in Liao et al. published annotation)\n",
@@ -648,7 +644,7 @@ if (file.exists(liao_annotation_path)) {
     }
   }
   
-  # Myeloidサブタイプも読み込み（マクロファージサブ分類用）
+  # Also load myeloid subtypes (for macrophage subclassification)
   if (file.exists(liao_myeloid_path)) {
     liao_myeloid <- read.delim(liao_myeloid_path, sep = "\t", header = TRUE)
     cat(sprintf("\n  Myeloid subtype file: %d cells loaded\n", nrow(liao_myeloid)))
@@ -665,8 +661,8 @@ if (file.exists(liao_annotation_path)) {
 cat("\n")
 
 # =====================================================================
-# GSE193782: RDS内メタデータの "Cell.Types" 列（原著者アノテーション）
-# GSE184735: 原著者アノテーションなし → kNN transfer
+# GSE193782: "Cell.Types" column in RDS metadata (author annotation)
+# GSE184735: no author annotation -> kNN transfer
 # =====================================================================
 
 cat("--- GSE193782 & GSE184735: Checking RDS metadata ---\n")
@@ -702,18 +698,18 @@ if ("Cell.Types" %in% colnames(reference_obj@meta.data)) {
 gse184735_cells <- which(reference_obj$dataset == "GSE184735")
 cat(sprintf("\n  GSE184735: %d cells → will use kNN transfer\n", length(gse184735_cells)))
 
-# 未アノテーション細胞の集計
+# Tally unannotated cells
 n_annotated <- sum(!is.na(reference_obj$celltype))
 n_unannotated <- sum(is.na(reference_obj$celltype))
 cat(sprintf("\n  Summary: %d annotated, %d unannotated (to be resolved by kNN)\n\n",
             n_annotated, n_unannotated))
 
 
-# --- 7c: 未アノテーション細胞へのkNNラベル転送 ---
+# --- 7c: kNN label transfer for unannotated cells ---
 cat("=== Step 2: kNN label transfer for unannotated cells ===\n\n")
 
-# 7aで原著者アノテーションが適用されなかった細胞を処理
-# （GSE184735全体 + GSE145926/193782のマッチしなかった細胞）
+# Process cells that did not receive an author annotation
+# (all of GSE184735 + unmatched cells from GSE145926/193782)
 
 unannotated_cells <- which(is.na(reference_obj$celltype))
 annotated_cells <- which(!is.na(reference_obj$celltype))
@@ -736,13 +732,13 @@ if (length(unannotated_cells) > 0 && length(annotated_cells) > 100) {
     ref_labels <- reference_obj$celltype[annotated_cells]
     query_embeddings <- harmony_embeddings[unannotated_cells, , drop = FALSE]
     
-    # バッチ処理
+    # Batch processing
     batch_size <- 5000
     n_batches <- ceiling(length(unannotated_cells) / batch_size)
     knn_labels <- character(length(unannotated_cells))
     knn_confidence <- numeric(length(unannotated_cells))
-    
-    # リファレンス側の事前計算
+
+    # Precompute on the reference side
     b2 <- rowSums(ref_embeddings^2)
     
     for (b in 1:n_batches) {
@@ -779,7 +775,7 @@ if (length(unannotated_cells) > 0 && length(annotated_cells) > 100) {
     }
     
   } else {
-    # Harmony未実行 → canonical markerフォールバック
+    # Harmony not run -> canonical marker fallback
     cat("Harmony not available → using canonical marker classification...\n")
     
     expr_data <- GetAssayData(reference_obj, layer = "data")
@@ -814,7 +810,7 @@ if (length(unannotated_cells) > 0 && length(annotated_cells) > 100) {
   cat("⚠ Insufficient annotated cells for kNN transfer.\n")
 }
 
-# 最終アノテーション結果のサマリー
+# Final annotation summary
 cat("\n=== Final annotation summary ===\n")
 cat("Cell type distribution:\n")
 print(table(reference_obj$celltype))
@@ -829,21 +825,21 @@ for (ds in c("GSE145926", "GSE193782", "GSE184735")) {
                     sep = "=", collapse = ", ")))
 }
 
-# NAが残っている場合の処理
+# Handle any remaining NA
 n_na <- sum(is.na(reference_obj$celltype))
 if (n_na > 0) {
   cat(sprintf("\n⚠ %d cells with NA annotation → assigning 'Other'\n", n_na))
   reference_obj$celltype[is.na(reference_obj$celltype)] <- "Other"
 }
 
-# --- 7d: Macrophageサブタイプ分類 ---
+# --- 7d: Macrophage subtype classification ---
 cat("\n=== Step 3: Macrophage subtype classification ===\n")
 cat("  Alveolar Mac (FABP4/MARCO) vs Monocyte-derived Mac (FCN1/CD14)\n\n")
 
 mac_cells <- which(reference_obj$celltype == "Macrophage")
 cat(sprintf("  Total Macrophages: %d\n", length(mac_cells)))
 
-# celltype_fine初期化（大分類と同じ）
+# Initialize celltype_fine (same as the coarse celltype)
 reference_obj$celltype_fine <- reference_obj$celltype
 
 if (length(mac_cells) > 0) {
@@ -861,8 +857,8 @@ if (length(mac_cells) > 0) {
     
     mac_subtype <- ifelse(alv_score > mono_score, "Alveolar_Mac", "Monocyte_Mac")
     
-    # GSE193782: Cell.Typesが"AMs"の細胞は定義上Alveolar_Mac
-    # original_author_labelを使ってオーバーライド
+    # GSE193782: cells with Cell.Types == "AMs" are Alveolar_Mac by definition
+    # Override using original_author_label
     for (i in seq_along(mac_cells)) {
       ci <- mac_cells[i]
       orig <- reference_obj$original_author_label[ci]
@@ -872,7 +868,7 @@ if (length(mac_cells) > 0) {
         } else if (grepl("^Mono$|^Mono\\.|FOLR2", orig)) {
           mac_subtype[i] <- "Monocyte_Mac"
         }
-        # GSE145926 v2ラベルも活用
+        # Also use GSE145926 pre-existing labels
         if (grepl("Alveolar_Mac", orig)) {
           mac_subtype[i] <- "Alveolar_Mac"
         } else if (grepl("Monocyte_Mac", orig)) {
@@ -894,10 +890,10 @@ if (length(mac_cells) > 0) {
   }
 }
 
-# --- 7e: Canonical markerによるアノテーション品質検証 ---
+# --- 7e: Annotation quality validation with canonical markers ---
 cat("\n=== Step 4: Annotation quality validation with canonical markers ===\n\n")
 
-# 各細胞タイプの代表マーカー発現を確認
+# Check representative marker expression for each cell type
 expr_data <- GetAssayData(reference_obj, layer = "data")
 
 validation_markers <- list(
@@ -933,7 +929,7 @@ for (ct in names(validation_markers)) {
   }
 }
 
-# --- 7f: アノテーション結果サマリー ---
+# --- 7f: Annotation summary ---
 cat("\n\n=== Cell Type Distribution (Final) ===\n")
 print(table(reference_obj$celltype))
 
@@ -946,7 +942,7 @@ print(table(reference_obj$dataset, reference_obj$celltype))
 cat("\n=== Fine Cell Types ===\n")
 print(table(reference_obj$celltype_fine))
 
-# --- 7g: UMAP可視化 ---
+# --- 7g: UMAP visualization ---
 cat("\nGenerating annotation plots...\n")
 
 p1 <- DimPlot(reference_obj, group.by = "dataset") + ggtitle("Datasets (Harmony)")
@@ -964,7 +960,7 @@ p4 <- DimPlot(reference_obj, group.by = "annotation_source") +
   ggtitle("Annotation Source (author vs marker)")
 ggsave(file.path(output_dir, "UMAP_annotation_source.pdf"), p4, width = 10, height = 8)
 
-# Canonical marker dot plot（査読用の品質証拠）
+# Canonical marker dot plot (annotation quality evidence)
 marker_genes_for_plot <- c(
   "CD68", "MARCO", "FABP4", "FCN1",        # Macrophage
   "CD3D", "CD3E",                            # T cell
@@ -986,13 +982,13 @@ if (length(marker_genes_for_plot) > 0) {
   cat("✓ Canonical marker dot plot saved\n")
 }
 
-# リファレンス保存
+# Save reference
 saveRDS(reference_obj, file.path(output_dir, "BAL_reference_author_annotated.rds"))
 cat("✓ Reference with author annotation saved\n")
 gc()
 
 # =====================================
-# PART 8: Bulk データ準備
+# PART 8: Bulk data preparation
 # =====================================
 
 cat("\n")
@@ -1010,8 +1006,8 @@ if ("Cluster_ID" %in% colnames(bulk_raw)) {
 bulk_matrix <- as.matrix(bulk_raw)
 cat(sprintf("Bulk data: %d genes × %d samples\n", nrow(bulk_matrix), ncol(bulk_matrix)))
 
-# 遺伝子名変換（Ensembl → Gene Symbol）
-# org.Hs.eg.db（ローカル）を優先、失敗時のみbiomaRtにfallback
+# Gene name conversion (Ensembl -> Gene Symbol)
+# Prefer org.Hs.eg.db (local); fall back to biomaRt only on failure
 cat("\nConverting Ensembl IDs to Gene Symbols...\n")
 
 gene_mapping <- tryCatch({
@@ -1047,7 +1043,7 @@ valid <- !is.na(new_names) & new_names != ""
 bulk_matrix <- bulk_matrix[valid, ]
 rownames(bulk_matrix) <- new_names[valid]
 
-# 重複遺伝子: 発現量の合計
+# Duplicate genes: sum expression counts
 if (any(duplicated(rownames(bulk_matrix)))) {
   cat("  Aggregating duplicated gene names...\n")
   bulk_df <- as.data.frame(bulk_matrix)
@@ -1061,42 +1057,41 @@ if (any(duplicated(rownames(bulk_matrix)))) {
 cat(sprintf("✓ Bulk matrix: %d genes × %d samples\n", nrow(bulk_matrix), ncol(bulk_matrix)))
 
 # =====================================
-# PART 9: BayesPrism Deconvolution（改善ポイント②）
+# PART 9: BayesPrism Deconvolution
 # =====================================
 
 cat("\n")
 cat("╔══════════════════════════════════════════════════════════════╗\n")
 cat("║  PART 9: BayesPrism Deconvolution                           ║\n")
-cat("║  (v2の MuSiC+NNLS から大幅改善)                              ║\n")
-cat("║  - プラットフォーム差を明示的にモデル化                     ║\n")
-cat("║  - Bayesian推定で不確実性を考慮                             ║\n")
+cat("║  - Models platform differences explicitly                   ║\n")
+cat("║  - Accounts for uncertainty via Bayesian estimation         ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-# --- 9a: BayesPrism用の入力行列を準備 ---
+# --- 9a: Prepare BayesPrism input matrices ---
 cat("Preparing BayesPrism input matrices...\n")
 
-# scRNA-seq: cell × gene の raw count matrix（BayesPrismの要件）
+# scRNA-seq: cell x gene raw count matrix (required by BayesPrism)
 sc_counts <- GetAssayData(reference_obj, layer = "counts")
 
-# sparse → dense行列変換 & 転置（BayesPrismはcell × gene）
+# sparse -> dense conversion & transpose (BayesPrism expects cell x gene)
 sc_dat <- t(as.matrix(sc_counts))
 cat(sprintf("  sc.dat: %d cells × %d genes\n", nrow(sc_dat), ncol(sc_dat)))
 
-# Bulk: sample × gene のcount matrix（BayesPrismの要件）
+# Bulk: sample x gene count matrix (required by BayesPrism)
 bk_dat <- t(bulk_matrix)
 cat(sprintf("  bk.dat: %d samples × %d genes\n", nrow(bk_dat), ncol(bk_dat)))
 
-# Cell type labels（BayesPrismはcelltype + cell stateの2層構造をサポート）
-cell_type_labels <- reference_obj$celltype       # 大分類（deconvolution用）
-cell_state_labels <- reference_obj$celltype_fine  # 細分類（情報活用）
+# Cell type labels (BayesPrism supports a 2-layer celltype + cell state structure)
+cell_type_labels <- reference_obj$celltype       # coarse type (used for deconvolution)
+cell_state_labels <- reference_obj$celltype_fine  # fine type (informational)
 
 cat(sprintf("  Cell types: %s\n", paste(sort(unique(cell_type_labels)), collapse = ", ")))
 cat(sprintf("  Cell states: %s\n", paste(sort(unique(cell_state_labels)), collapse = ", ")))
 
-# --- 9b: 外れ値遺伝子の除去 ---
+# --- 9b: Remove outlier genes ---
 cat("\nFiltering outlier genes...\n")
 
-# BayesPrism推奨: リボソーム・ミトコンドリア遺伝子を除外
+# BayesPrism recommendation: exclude ribosomal and mitochondrial genes
 genes_to_remove <- grep("^RP[SL]|^MT-|^MTRNR", colnames(sc_dat), value = TRUE)
 cat(sprintf("  Removing %d ribosomal/mitochondrial genes\n", length(genes_to_remove)))
 
@@ -1105,7 +1100,7 @@ if (length(genes_to_remove) > 0) {
   sc_dat <- sc_dat[, keep_genes_sc]
 }
 
-# Bulk側からも同じ遺伝子を除去
+# Remove the same genes from the bulk side
 genes_to_remove_bk <- grep("^RP[SL]|^MT-|^MTRNR", colnames(bk_dat), value = TRUE)
 if (length(genes_to_remove_bk) > 0) {
   keep_genes_bk <- setdiff(colnames(bk_dat), genes_to_remove_bk)
@@ -1115,7 +1110,7 @@ if (length(genes_to_remove_bk) > 0) {
 cat(sprintf("  sc.dat after filter: %d cells × %d genes\n", nrow(sc_dat), ncol(sc_dat)))
 cat(sprintf("  bk.dat after filter: %d samples × %d genes\n", nrow(bk_dat), ncol(bk_dat)))
 
-# --- 9c: BayesPrism QCプロット ---
+# --- 9c: BayesPrism QC plots ---
 cat("\nRunning BayesPrism outlier detection...\n")
 
 sc_stat <- plot.scRNA.outlier(
@@ -1133,7 +1128,7 @@ bk_stat <- plot.bulk.outlier(
   return.raw = TRUE
 )
 
-# scRNA-seqとbulkの両方で遺伝子を絞り込み
+# Restrict genes across both scRNA-seq and bulk
 sc_dat_filtered <- cleanup.genes(
   input = sc_dat,
   input.type = "count.matrix",
@@ -1144,7 +1139,7 @@ sc_dat_filtered <- cleanup.genes(
 
 cat(sprintf("  After cleanup: %d genes\n", ncol(sc_dat_filtered)))
 
-# --- 9d: Prismオブジェクト作成 ---
+# --- 9d: Build Prism object ---
 cat("\nConstructing BayesPrism object...\n")
 
 myPrism <- new.prism(
@@ -1153,7 +1148,7 @@ myPrism <- new.prism(
   input.type = "count.matrix",
   cell.type.labels = cell_type_labels,
   cell.state.labels = cell_state_labels,
-  key = NULL,   # malignant cell keyなし（非腫瘍サンプル）
+  key = NULL,   # no malignant cell key (non-tumor samples)
   outlier.cut = 0.01,
   outlier.fraction = 0.1
 )
@@ -1162,7 +1157,7 @@ cat("✓ Prism object created\n")
 cat(sprintf("  Reference cell types: %s\n",
             paste(sort(unique(cell_type_labels)), collapse = ", ")))
 
-# --- 9e: BayesPrism実行 ---
+# --- 9e: Run BayesPrism ---
 cat("\nRunning BayesPrism deconvolution (this may take 10-30 minutes)...\n")
 cat("  Using Gibbs sampling for posterior estimation...\n")
 
@@ -1174,7 +1169,7 @@ bp_result <- run.prism(
 
 cat("✓ BayesPrism deconvolution complete!\n")
 
-# --- 9f: 結果抽出 ---
+# --- 9f: Extract results ---
 # Cell type fractions (θ)
 theta <- get.fraction(
   bp = bp_result,
@@ -1191,7 +1186,7 @@ for (ct in colnames(theta)) {
               ct, mean(ct_vals), sd(ct_vals), min(ct_vals), max(ct_vals)))
 }
 
-# Cell state fractions（細分類）
+# Cell state fractions (fine subtypes)
 theta_state <- get.fraction(
   bp = bp_result,
   which.theta = "final",
@@ -1205,21 +1200,21 @@ for (cs in colnames(theta_state)) {
   cat(sprintf("%-25s %9.1f%%\n", cs, mean(theta_state[, cs]) * 100))
 }
 
-# 結果保存（RNA未補正版）
+# Save results (RNA-fraction, uncorrected)
 write.csv(theta, file.path(output_dir, "celltype_proportions_BayesPrism.csv"))
 write.csv(theta_state, file.path(output_dir, "cellstate_proportions_BayesPrism.csv"))
 
 gc()
 
 # =====================================
-# PART 9.5: RNA Content補正（RNA fraction → Cell fraction）
+# PART 9.5: RNA Content correction (RNA fraction -> Cell fraction)
 # =====================================
-# 
-# BayesPrismはRNA寄与割合（RNA fraction）を推定するが、FCMは細胞数比（cell fraction）を測定。
-# マクロファージは1細胞あたりのRNA量がリンパ球の5-10倍であるため、
-# RNA fraction → cell fraction への変換が必須。
-# 
-# 補正係数はリファレンスscRNA-seqから直接推定する（data-driven）:
+#
+# BayesPrism estimates RNA contribution fractions, but FCM measures cell-number
+# fractions. Because macrophages contain 5-10x more RNA per cell than lymphocytes,
+# converting RNA fraction -> cell fraction is necessary.
+#
+# Correction factors are estimated directly from the reference scRNA-seq (data-driven):
 #   RNA_content_i = median(total UMI per cell) for cell type i
 #   cell_fraction_i = (theta_i / RNA_content_i) / sum(theta_j / RNA_content_j)
 #
@@ -1231,10 +1226,10 @@ gc()
 cat("\n")
 cat("╔══════════════════════════════════════════════════════════════╗\n")
 cat("║  PART 9.5: RNA Content Correction                           ║\n")
-cat("║  RNA fraction → Cell fraction (FCM比較のため)               ║\n")
+cat("║  RNA fraction -> Cell fraction (for FCM comparison)         ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-# Step 1: scRNA-seqリファレンスから各細胞タイプの中央RNA量を推定
+# Step 1: estimate median RNA content per cell type from the scRNA-seq reference
 cat("Estimating RNA content per cell type from scRNA-seq reference...\n")
 rna_content <- tapply(reference_obj$nCount_RNA, reference_obj$celltype, median)
 cat("\nMedian UMI counts per cell type:\n")
@@ -1242,7 +1237,7 @@ for (ct in sort(names(rna_content))) {
   cat(sprintf("  %-15s: %8.0f UMI\n", ct, rna_content[ct]))
 }
 
-# 基準値で正規化（T cellを1.0とする）
+# Normalize to a baseline (T cell = 1.0)
 if ("T_cell" %in% names(rna_content)) {
   baseline <- rna_content["T_cell"]
 } else {
@@ -1255,13 +1250,13 @@ for (ct in sort(names(rna_ratio))) {
   cat(sprintf("  %-15s: %.2f x\n", ct, rna_ratio[ct]))
 }
 
-# Step 2: RNA fraction → Cell fraction 変換
+# Step 2: convert RNA fraction -> Cell fraction
 cat("\nConverting RNA fractions to cell fractions...\n")
 
-# theta の各行（サンプル）に対して補正
-theta_cell <- theta  # コピー
+# Apply correction to each row (sample) of theta
+theta_cell <- theta  # copy
 for (i in 1:nrow(theta)) {
-  # 各細胞タイプのRNA fractionをRNA content ratioで割る
+  # Divide each cell type's RNA fraction by its RNA content ratio
   cell_fraction_raw <- numeric(ncol(theta))
   names(cell_fraction_raw) <- colnames(theta)
   
@@ -1273,14 +1268,14 @@ for (i in 1:nrow(theta)) {
     }
   }
   
-  # 合計が1になるよう正規化
+  # Normalize so the values sum to 1
   total <- sum(cell_fraction_raw)
   if (total > 0) {
     theta_cell[i, ] <- cell_fraction_raw / total
   }
 }
 
-# 補正前後の比較
+# Compare before vs after correction
 cat("\n=== RNA fraction vs Cell fraction (Mean %) ===\n")
 cat(sprintf("%-15s %12s %12s %10s\n", "Cell Type", "RNA frac", "Cell frac", "Change"))
 cat(paste(rep("-", 55), collapse = ""), "\n")
@@ -1291,21 +1286,21 @@ for (ct in colnames(theta)) {
   cat(sprintf("%-15s %11.1f%% %11.1f%% %+9.1f%%\n", ct, rna_pct, cell_pct, change))
 }
 
-# 補正済み結果を保存
+# Save corrected results
 write.csv(theta_cell, file.path(output_dir, "celltype_proportions_cellFraction.csv"))
 cat("\n✓ Cell fraction proportions saved\n")
 
 # =====================================
-# PART 10: FCM バリデーション（多角的検証）
+# PART 10: FCM validation (multi-metric)
 # =====================================
 #
-# 検証指標:
-#   1. Spearman順位相関（非線形関係にロバスト）
-#   2. Pearson相関（従来法との比較用）
-#   3. 群間差の方向性一致（RA-ILD vs Control）
-#   4. Bland-Altman分析（系統的バイアスの評価）
+# Validation metrics:
+#   1. Spearman rank correlation (robust to nonlinear relationships)
+#   2. Pearson correlation (for comparison with conventional methods)
+#   3. Group-difference direction concordance (RA-ILD vs Control)
+#   4. Bland-Altman analysis (assessment of systematic bias)
 #
-# RNA未補正版（theta）とRNA補正版（theta_cell）の両方で検証
+# Validated on both the RNA-uncorrected (theta) and RNA-corrected (theta_cell) versions
 
 cat("\n")
 cat("╔══════════════════════════════════════════════════════════════╗\n")
@@ -1313,24 +1308,24 @@ cat("║  PART 10: Flow Cytometry Validation (Multi-metric)          ║\n")
 cat("║  Spearman + Pearson + Group concordance + Bland-Altman      ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-# FCMデータ読み込み
+# Load FCM data
 fcm_path <- "./FCM_integrated_data_transformed.xlsx"
 
 if (file.exists(fcm_path)) {
   fcm_data <- read_excel(fcm_path, sheet = "BALF_analysis")
   cat(sprintf("FCM data loaded: %d samples\n", nrow(fcm_data)))
   
-  # サンプル名列を特定
+  # Identify the sample-name column
   id_col <- colnames(fcm_data)[1]
   fcm_data$sample_id <- fcm_data[[id_col]]
   
-  # FCMの Macrophage/Lymphocyte/Neutrophil 列を特定
-  # _Percent列を優先（全細胞分画%）。サブタイプマーカー列を誤って取得しないようにする。
+  # Identify FCM Macrophage/Lymphocyte/Neutrophil columns
+  # Prefer _Percent columns (whole-cell fraction %); avoid mistakenly picking subtype marker columns.
   fcm_mac_col <- "BALF_Macrophage_Percent"
   fcm_lym_col <- "BALF_Lymphocyte_Percent"
   fcm_neu_col <- "BALF_Neutrophil_Percent"
 
-  # 列が存在しない場合のフォールバック
+  # Fallback when a column is missing
   if (!fcm_mac_col %in% colnames(fcm_data)) {
     fcm_mac_col <- grep("Macrophage_Percent|Macrophage%", colnames(fcm_data), value = TRUE, ignore.case = TRUE)[1]
   }
@@ -1344,7 +1339,7 @@ if (file.exists(fcm_path)) {
   cat(sprintf("  FCM columns: Mac=%s, Lymph=%s, Neut=%s\n",
               fcm_mac_col, fcm_lym_col, fcm_neu_col))
 
-  # 共通サンプル
+  # Common samples
   bp_samples <- rownames(theta)
   fcm_samples <- as.character(fcm_data$sample_id)
   common_samples <- intersect(bp_samples, fcm_samples)
@@ -1352,30 +1347,30 @@ if (file.exists(fcm_path)) {
 
   if (length(common_samples) > 5) {
 
-    # --- FCM値の取得 ---
+    # --- Retrieve FCM values ---
     fcm_idx <- match(common_samples, fcm_data$sample_id)
     fcm_mac_vals  <- as.numeric(fcm_data[[fcm_mac_col]][fcm_idx])
     fcm_lym_vals  <- as.numeric(fcm_data[[fcm_lym_col]][fcm_idx])
     fcm_neut_vals <- as.numeric(fcm_data[[fcm_neu_col]][fcm_idx])
     
-    # --- BayesPrism推定値（RNA未補正 & 補正済み） ---
+    # --- BayesPrism estimates (RNA-uncorrected & corrected) ---
     lymph_cols <- intersect(c("T_cell", "NK", "B_cell", "Plasma"), colnames(theta))
     
-    # RNA fraction版
+    # RNA fraction version
     bp_mac_rna  <- theta[common_samples, "Macrophage"] * 100
     bp_lymph_rna <- rowSums(theta[common_samples, lymph_cols, drop = FALSE]) * 100
     bp_neut_rna <- if ("Neutrophil" %in% colnames(theta)) {
       theta[common_samples, "Neutrophil"] * 100
     } else { rep(0, length(common_samples)) }
     
-    # Cell fraction版（RNA content補正済み）
+    # Cell fraction version (RNA content corrected)
     bp_mac_cell  <- theta_cell[common_samples, "Macrophage"] * 100
     bp_lymph_cell <- rowSums(theta_cell[common_samples, lymph_cols, drop = FALSE]) * 100
     bp_neut_cell <- if ("Neutrophil" %in% colnames(theta_cell)) {
       theta_cell[common_samples, "Neutrophil"] * 100
     } else { rep(0, length(common_samples)) }
     
-    # --- 相関分析（Spearman + Pearson、RNA版 & Cell版）---
+    # --- Correlation analysis (Spearman + Pearson; RNA & Cell versions) ---
     cat("\n╔═══════════════════════════════════════════════════════════════╗\n")
     cat("║  Correlation Analysis: BayesPrism vs FCM                      ║\n")
     cat("╚═══════════════════════════════════════════════════════════════╝\n\n")
@@ -1405,12 +1400,12 @@ if (file.exists(fcm_path)) {
       )
     }
     
-    # RNA fraction版
+    # RNA fraction version
     res_mac_rna <- run_correlation(bp_mac_rna, fcm_mac_vals, "Macrophage_RNA")
     res_lym_rna <- run_correlation(bp_lymph_rna, fcm_lym_vals, "Lymphocyte_RNA")
     res_neu_rna <- run_correlation(bp_neut_rna, fcm_neut_vals, "Neutrophil_RNA")
     
-    # Cell fraction版
+    # Cell fraction version
     res_mac_cell <- run_correlation(bp_mac_cell, fcm_mac_vals, "Macrophage_Cell")
     res_lym_cell <- run_correlation(bp_lymph_cell, fcm_lym_vals, "Lymphocyte_Cell")
     res_neu_cell <- run_correlation(bp_neut_cell, fcm_neut_vals, "Neutrophil_Cell")
@@ -1441,7 +1436,7 @@ if (file.exists(fcm_path)) {
                 res_neu_cell$spearman_r, res_neu_cell$spearman_p,
                 res_neu_cell$pearson_r, res_neu_cell$pearson_p, res_neu_cell$n))
     
-    # --- 群間差の方向性一致分析 ---
+    # --- Group-difference direction concordance analysis ---
     cat("\n╔═══════════════════════════════════════════════════════════════╗\n")
     cat("║  Group Concordance: RA-ILD vs Control direction agreement     ║\n")
     cat("╚═══════════════════════════════════════════════════════════════╝\n\n")
@@ -1460,7 +1455,7 @@ if (file.exists(fcm_path)) {
         stringsAsFactors = FALSE
       )
       
-      # Cell fraction版で群間比較
+      # Group comparison using the cell fraction version
       compare_groups <- function(bp_vals, fcm_vals, ky_mask, kyc_mask, cell_name) {
         fcm_ky <- mean(fcm_vals[ky_mask], na.rm = TRUE)
         fcm_kyc <- mean(fcm_vals[kyc_mask], na.rm = TRUE)
@@ -1512,14 +1507,13 @@ if (file.exists(fcm_path)) {
       write.csv(concordance_table, file.path(output_dir, "FCM_group_concordance.csv"), row.names = FALSE)
     }
     
-    # --- バリデーションプロット（6パネル: RNA版×3 + Cell版×3）---
+    # --- Validation plots (6 panels: RNA version x3 + Cell version x3) ---
     cat("\nGenerating validation plots...\n")
     
     tryCatch({
       pdf(file.path(output_dir, "FCM_validation_BayesPrism.pdf"), width = 15, height = 10)
       par(mfrow = c(2, 3), mar = c(5, 5, 4, 2))
       
-      # 上段: RNA fraction
       plot_validation <- function(bp, fcm, label, color, res) {
         valid <- !is.na(fcm) & !is.na(bp)
         plot(fcm[valid], bp[valid],
@@ -1533,7 +1527,7 @@ if (file.exists(fcm_path)) {
         if (sum(valid) >= 3) {
           abline(lm(bp[valid] ~ fcm[valid]), col = color, lwd = 2)
         }
-        # KY/KYCをシンボルで区別
+        # Distinguish KY/KYC by symbol
         ky_pts <- grepl("^(KY[0-9]|RA[0-9])", common_samples) & valid
         kyc_pts <- grepl("^(KYC|Sarcoidosis)", common_samples) & valid
         points(fcm[ky_pts], bp[ky_pts], pch = 19, col = adjustcolor("red", 0.6), cex = 1.2)
@@ -1542,12 +1536,12 @@ if (file.exists(fcm_path)) {
                pch = c(19, 17), col = c("red", "blue"), cex = 0.8, bty = "n")
       }
       
-      # 上段: RNA fraction
+      # Top row: RNA fraction
       plot_validation(bp_mac_rna, fcm_mac_vals, "Macrophage (RNA frac)", "steelblue", res_mac_rna)
       plot_validation(bp_lymph_rna, fcm_lym_vals, "Lymphocyte (RNA frac)", "forestgreen", res_lym_rna)
       plot_validation(bp_neut_rna, fcm_neut_vals, "Neutrophil (RNA frac)", "coral", res_neu_rna)
       
-      # 下段: Cell fraction（RNA content補正済み）
+      # Bottom row: Cell fraction (RNA content corrected)
       plot_validation(bp_mac_cell, fcm_mac_vals, "Macrophage (Cell frac)", "steelblue", res_mac_cell)
       plot_validation(bp_lymph_cell, fcm_lym_vals, "Lymphocyte (Cell frac)", "forestgreen", res_lym_cell)
       plot_validation(bp_neut_cell, fcm_neut_vals, "Neutrophil (Cell frac)", "coral", res_neu_cell)
@@ -1559,7 +1553,7 @@ if (file.exists(fcm_path)) {
       cat(sprintf("⚠ Plot generation failed: %s\n", e$message))
     })
     
-    # --- バリデーション結果CSV（包括版）---
+    # --- Validation results CSV (comprehensive) ---
     validation_df <- data.frame(
       Sample = common_samples,
       Group = ifelse(grepl("^(KY[0-9]|RA[0-9])", common_samples), "RA-ILD", "Control"),
@@ -1575,7 +1569,7 @@ if (file.exists(fcm_path)) {
     )
     write.csv(validation_df, file.path(output_dir, "FCM_validation_data.csv"), row.names = FALSE)
     
-    # サマリーCSV（Bootstrap 95% CI付き）
+    # Summary CSV (with bootstrap 95% CI)
     summary_corr <- data.frame(
       CellType = rep(c("Macrophage", "Lymphocyte", "Neutrophil"), 2),
       Version = rep(c("RNA_fraction", "Cell_fraction"), each = 3),
@@ -1607,7 +1601,7 @@ if (file.exists(fcm_path)) {
 }
 
 # =====================================
-# PART 11: KY vs KYC 群間比較
+# PART 11: KY vs KYC group comparison
 # =====================================
 
 cat("\n")
@@ -1621,7 +1615,7 @@ kyc_samples <- grep("^(KYC|Sarcoidosis)", rownames(theta), value = TRUE)
 cat(sprintf("KY samples (RA-ILD): n=%d\n", length(ky_samples)))
 cat(sprintf("KYC samples (Control): n=%d\n", length(kyc_samples)))
 
-# --- 11a: Cell fraction版（RNA content補正済み、FCM比較可能）---
+# --- 11a: Cell fraction version (RNA content corrected, comparable to FCM) ---
 cat("\n--- Cell Fraction (RNA content corrected) ---\n")
 cat(sprintf("%-20s %12s %12s %10s %8s\n",
             "Cell Type", "KY (RA-ILD)", "KYC (Ctrl)", "p-value", "Sig"))
@@ -1660,7 +1654,7 @@ for (ct in colnames(theta_cell)) {
   ))
 }
 
-# --- 11b: RNA fraction版（参考値）---
+# --- 11b: RNA fraction version (reference) ---
 cat("\n--- RNA Fraction (uncorrected, for reference) ---\n")
 cat(sprintf("%-20s %12s %12s %10s %8s\n",
             "Cell Type", "KY (RA-ILD)", "KYC (Ctrl)", "p-value", "Sig"))
@@ -1700,7 +1694,7 @@ for (ct in colnames(theta)) {
 write.csv(comparison_results, file.path(output_dir, "KY_vs_KYC_comparison_BayesPrism.csv"),
           row.names = FALSE)
 
-# 群間比較プロット（Cell fraction版を主結果として提示）
+# Group comparison plot (cell fraction version shown as the main result)
 theta_long <- as.data.frame(theta_cell) %>%
   rownames_to_column("Sample") %>%
   mutate(Group = ifelse(grepl("^(KYC|Sarcoidosis)", Sample), "Control (KYC)", "RA-ILD (KY)")) %>%
@@ -1718,7 +1712,7 @@ p_comparison <- ggplot(theta_long, aes(x = CellType, y = Fraction * 100, fill = 
 ggsave(file.path(output_dir, "KY_vs_KYC_boxplot_BayesPrism.pdf"), p_comparison, width = 14, height = 8)
 
 # =====================================
-# PART 12: 可視化と結果保存
+# PART 12: Visualization and saving results
 # =====================================
 
 cat("\n")
@@ -1726,7 +1720,7 @@ cat("╔════════════════════════
 cat("║  PART 12: Visualization and Results                          ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-# ヒートマップ（pheatmapは内部で一時PNGを生成するため、明示的にデバイス設定）
+# Heatmap (pheatmap generates a temporary PNG internally, so set the device explicitly)
 tryCatch({
   pdf(file.path(output_dir, "celltype_heatmap_BayesPrism.pdf"), width = 16, height = 10)
   pheatmap(
@@ -1765,7 +1759,7 @@ tryCatch({
   })
 })
 
-# 積み上げ棒グラフ（Cell fraction版）
+# Stacked bar plot (cell fraction version)
 prop_long <- as.data.frame(theta_cell) %>%
   rownames_to_column("Sample") %>%
   pivot_longer(-Sample, names_to = "CellType", values_to = "Proportion")
@@ -1780,7 +1774,7 @@ p_stacked <- ggplot(prop_long, aes(x = Sample, y = Proportion, fill = CellType))
 
 ggsave(file.path(output_dir, "celltype_stacked_barplot_BayesPrism.pdf"), p_stacked, width = 16, height = 8)
 
-# サマリー統計（Cell fraction版）
+# Summary statistics (cell fraction version)
 summary_df <- data.frame(
   CellType = colnames(theta_cell),
   Mean = colMeans(theta_cell) * 100,
@@ -1792,12 +1786,12 @@ summary_df <- data.frame(
 
 write.csv(summary_df, file.path(output_dir, "celltype_summary_BayesPrism.csv"), row.names = FALSE)
 
-# アノテーション戦略の記録
+# Record the annotation strategy
 annotation_summary <- data.frame(
   Dataset = c("GSE145926", "GSE193782", "GSE184735"),
   stringsAsFactors = FALSE
 )
-# 各データセットのアノテーションソースを集計
+# Tally annotation source per dataset
 for (i in 1:3) {
   ds <- annotation_summary$Dataset[i]
   ds_cells <- which(reference_obj$dataset == ds)
@@ -1809,7 +1803,7 @@ for (i in 1:3) {
 write.csv(annotation_summary, file.path(output_dir, "annotation_strategy_summary.csv"),
           row.names = FALSE)
 
-# 全結果保存
+# Save all results
 saveRDS(list(
   bp_result = bp_result,
   theta_type = theta,
@@ -1826,7 +1820,7 @@ saveRDS(list(
   )
 ), file.path(output_dir, "full_analysis_results_v3.rds"))
 
-# セッション情報
+# Session info
 sink(file.path(output_dir, "session_info_v3.txt"))
 cat("Analysis completed:", as.character(Sys.time()), "\n")
 cat("Pipeline: v3 (Author Annotation + BayesPrism)\n\n")
@@ -1844,11 +1838,11 @@ cat(sprintf("Deconvolution: BayesPrism (Gibbs sampling)\n\n"))
 sessionInfo()
 sink()
 
-# ワークスペース保存
+# Save workspace
 save.image(file.path(output_dir, "BAL_analysis_v3.RData"))
 
 # =====================================
-# PART 13: 最終レポート
+# PART 13: Final report
 # =====================================
 
 cat("\n")
@@ -1856,15 +1850,7 @@ cat("╔════════════════════════
 cat("║                    FINAL REPORT v3                           ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n")
 
-cat("\n【改善ポイント (v2 → v3)】\n")
-cat("  1. アノテーション: AddModuleScore+which.max → 原著者peer-reviewedアノテーション\n")
-cat("     (リファレンスミスマッチの査読批判を完全回避)\n")
-cat("  2. Deconvolution: MuSiC+NNLS → BayesPrism (Bayesianモデル)\n")
-cat("  3. FCMバリデーション: 自動相関解析統合\n")
-cat("  4. 遺伝子フィルタ: Rb/Mt/MALAT1除外でノイズ軽減\n")
-cat("  5. 品質検証: canonical marker dot plotによるアノテーション妥当性確認\n")
-
-cat("\n【ANNOTATION STRATEGY】\n")
+cat("\n[ANNOTATION STRATEGY]\n")
 for (ds in c("GSE145926", "GSE193782", "GSE184735")) {
   ds_cells <- which(reference_obj$dataset == ds)
   sources <- table(reference_obj$annotation_source[ds_cells])
@@ -1873,38 +1859,38 @@ for (ds in c("GSE145926", "GSE193782", "GSE184735")) {
               length(ds_cells)))
 }
 
-cat("\n【REFERENCE DATA】\n")
+cat("\n[REFERENCE DATA]\n")
 cat(sprintf("  Total cells: %d\n", ncol(reference_obj)))
 cat(sprintf("  Datasets: GSE193782 (Healthy) + GSE184735 (Sarcoidosis) + GSE145926 (COVID-19)\n"))
 cat(sprintf("  All datasets: BAL fluid-derived scRNA-seq\n"))
 
-cat("\n【DECONVOLUTION RESULTS (BayesPrism)】\n")
+cat("\n[DECONVOLUTION RESULTS (BayesPrism)]\n")
 cat(sprintf("%-20s %10s\n", "Cell Type", "Mean %"))
 cat(paste(rep("-", 35), collapse = ""), "\n")
 for (i in 1:nrow(summary_df)) {
   cat(sprintf("%-20s %9.1f%%\n", summary_df$CellType[i], summary_df$Mean[i]))
 }
 
-# FCMバリデーション結果があれば表示
+# Show FCM validation results if available
 if (exists("validation_results") && length(validation_results) > 0) {
-  cat("\n【FCM VALIDATION】\n")
+  cat("\n[FCM VALIDATION]\n")
   for (ct_name in names(validation_results)) {
     vr <- validation_results[[ct_name]]
     cat(sprintf("  %s: r=%.3f (p=%.4f)\n", ct_name, vr$estimate, vr$p.value))
   }
   
-  # 目標達成判定
+  # Target check
   all_r <- sapply(validation_results, function(x) x$estimate)
   if (all(all_r > 0.6)) {
-    cat("\n  ✓ 全細胞タイプでr>0.6達成 → FCM非測定細胞の推定値も信頼可能\n")
+    cat("\n  ✓ r>0.6 for all cell types -> estimates for FCM-unmeasured cells are also reliable\n")
   } else {
     low_r <- names(all_r)[all_r <= 0.6]
-    cat(sprintf("\n  ⚠ r≤0.6の細胞タイプ: %s → リファレンスの追加改善を検討\n",
+    cat(sprintf("\n  ⚠ Cell types with r<=0.6: %s -> consider further reference improvement\n",
                 paste(low_r, collapse = ", ")))
   }
 }
 
-cat("\n【METHODS SECTION (論文用)】\n")
+cat("\n[METHODS SECTION (for manuscript)]\n")
 cat("  Cell type deconvolution was performed using BayesPrism (Chu et al.,\n")
 cat("  Nature Cancer, 2022). Three publicly available BAL fluid scRNA-seq\n")
 cat("  datasets were used as reference: GSE193782 (healthy controls),\n")
@@ -1925,7 +1911,7 @@ cat("  estimates were validated against paired flow cytometry measurements\n")
 cat("  using Spearman rank correlation and concordance of group-level\n")
 cat("  differences (RA-ILD vs control).\n")
 
-cat("\n【OUTPUT FILES】\n")
+cat("\n[OUTPUT FILES]\n")
 cat(sprintf("Directory: %s\n\n", output_dir))
 output_files <- list.files(output_dir)
 for (f in output_files) {

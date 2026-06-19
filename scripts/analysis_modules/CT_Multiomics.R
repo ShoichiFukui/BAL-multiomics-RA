@@ -29,7 +29,8 @@ out_dir <- "results"
 # ============================================================================
 cat("=== PART 1: CT Data Integration ===\n")
 
-mapping <- read_excel("細萱先生A番号.xlsx", sheet="Sheet1")
+# Sample-ID to PatientID mapping table (rename the released data file to match)
+mapping <- read_excel("sample_id_mapping.xlsx", sheet="Sheet1")
 colnames(mapping)[1] <- "row_num"
 id_map <- data.frame(
   Sample_ID = as.character(mapping[["No."]]),
@@ -64,7 +65,7 @@ colnames(ct_t2) <- c("Sample_ID","CT_T2_Date", paste0("CT_T2_", ct_vars))
 two_tp <- ct_t1 %>% inner_join(ct_t2[, c("Sample_ID","CT_T2_Date")], by="Sample_ID") %>%
   filter(CT_T1_Date != CT_T2_Date)
 two_tp_ids <- two_tp$Sample_ID
-cat(sprintf("  2時点データ: %d patients\n", length(two_tp_ids)))
+cat(sprintf("  Two-timepoint data: %d patients\n", length(two_tp_ids)))
 
 # Delta = T2 - T1
 delta_df <- data.frame(Sample_ID = two_tp_ids)
@@ -83,7 +84,7 @@ for(v in ct_vars) {
   delta_df[[paste0("CT_Rate_", v)]] <- delta_df[[paste0("CT_Delta_", v)]] / delta_df$CT_Delta_Days * 365.25
 }
 
-cat(sprintf("  Delta計算完了: %d patients, %d days mean (range %d-%d)\n",
+cat(sprintf("  Delta computed: %d patients, %d days mean (range %d-%d)\n",
     nrow(delta_df), round(mean(delta_df$CT_Delta_Days)),
     min(delta_df$CT_Delta_Days), max(delta_df$CT_Delta_Days)))
 
@@ -101,7 +102,7 @@ cat("\n=== PART 2: Master Data Integration ===\n")
 
 master_ext <- master_data %>% left_join(ct_integrated, by="Sample_ID")
 cat(sprintf("  master_data: %d rows x %d cols\n", nrow(master_ext), ncol(master_ext)))
-cat(sprintf("  CT T1あり: %d, T2あり: %d, Deltaあり: %d\n",
+cat(sprintf("  CT T1 present: %d, T2 present: %d, Delta present: %d\n",
     sum(!is.na(master_ext$CT_T1_GGO_pct)),
     sum(!is.na(master_ext$CT_T2_GGO_pct)),
     sum(!is.na(master_ext$CT_Delta_GGO_pct))))

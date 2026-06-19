@@ -1,7 +1,7 @@
-# Option (b): medication-confounding for the RA-SPECIFIC outcome predictors used
-# in Fig5 — RA-only MOFA Factor 1 (ra_factors[,1]) and BAL Th17.1 — vs GC/MTX/NSAID.
+# Medication-confounding for the RA-specific outcome predictors used in Fig 5:
+# RA-only MOFA Factor 1 (ra_factors[,1]) and BAL Th17.1, vs GC/MTX/NSAID.
 # Writes Medication_Confounding_RAfactor.csv and regenerates FigS4_medication
-# (2 rows x 3 meds). Replaces the previous full-cohort IDD/IIV version.
+# (2 rows x 3 medications).
 suppressPackageStartupMessages({library(tidyverse);library(ggplot2);library(patchwork)})
 # Adjust BASEDIR to your local clone of the repository.
 BASEDIR <- Sys.getenv("HOSOGAYA_BAL_DIR", unset = getwd())

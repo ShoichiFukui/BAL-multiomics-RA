@@ -1,6 +1,6 @@
 # Multi-omics characterization of bronchoalveolar lavage fluid in rheumatoid arthritis
 
-Analysis code accompanying the manuscript by **Hosogaya, Fukui et al.**
+Analysis code accompanying the manuscript by **Fukui, Hosogaya et al.**
 (*Nature Communications*, under review).
 
 ## Study summary
@@ -158,24 +158,11 @@ If you use this code, please cite the manuscript (citation will be added upon
 publication). See [`CITATION.cff`](CITATION.cff) for machine-readable metadata.
 
 A permanent archive of the code with a citable DOI is hosted on Zenodo:
-[10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX) (to be
-populated upon manuscript acceptance).
-
-## Archiving with Zenodo (maintainer notes)
-
-After manuscript acceptance, perform the following steps to create a permanent,
-citable archive of the code:
-
-1. On GitHub, go to **Settings → Integrations & services** and enable the
-   [Zenodo GitHub integration](https://docs.github.com/en/repositories/archiving-a-github-repository/referencing-and-citing-content).
-2. Create a tagged release on GitHub (e.g. `v1.0.0`). Zenodo will automatically
-   archive the repository at that tag and mint a DOI.
-3. Update both [`README.md`](README.md) and [`CITATION.cff`](CITATION.cff)
-   replacing `10.5281/zenodo.XXXXXXX` with the issued DOI.
-4. Re-tag (`v1.0.1`) so the resolved DOI appears in the published archive.
+[10.5281/zenodo.20699675](https://doi.org/10.5281/zenodo.20699675) (concept DOI;
+always resolves to the latest version).
 
 ## Contact
 
-- Corresponding author: Saeko Fukui, M.D., Ph.D. (Nagasaki University Hospital)
+- Corresponding author: Naoki Hosogaya, M.D., Ph.D. (Nagasaki University Hospital)
 - Repository maintainer: [contact via corresponding author]
 - IRB approval: Nagasaki University Hospital IRB, approval numbers 19021801 and 2005819

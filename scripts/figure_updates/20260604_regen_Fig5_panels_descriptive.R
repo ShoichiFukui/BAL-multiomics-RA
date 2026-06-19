@@ -1,13 +1,11 @@
 # ============================================================================
 # 20260604_regen_Fig5_panels_descriptive.R
-# Regenerate Figure 5 panels with the IDD/IIV acronyms removed (descriptive
-# "Factor 1 / Factor 2" labels only; the descriptive meaning goes in the legend)
-# and Fig 5b reduced to Factor 1 only (Factor 3 dropped: nominal, undiscussed).
-#   5a R2 heatmap : "Factor 1 (IDD)"/"Factor 2 (IIV)" -> "Factor 1"/"Factor 2"
-#   5b boxplot    : F1 + F3 -> Factor 1 only (RA vs Sarcoidosis)
-#   5c disease ROC: "IDD (AUC=0.905)" -> "Factor 1 (AUC=0.905)"
-# Outputs (new names; originals preserved):
-#   Fig5a_R2_noacronym, Fig5b_Factor1_only, Fig5c_diseaseROC_noacronym
+# Figure 5 panels with descriptive "Factor 1 / Factor 2" labels, and Fig 5b
+# showing Factor 1 only (RA vs Sarcoidosis).
+#   5a R2 heatmap  : Factor labels
+#   5b boxplot     : Factor 1 only (RA vs Sarcoidosis)
+#   5c disease ROC : Factor 1 vs best serum biomarker
+# Outputs: Fig5a_R2_noacronym, Fig5b_Factor1_only, Fig5c_diseaseROC_noacronym
 # ============================================================================
 # Adjust BASEDIR to your local clone of the repository.
 BASEDIR <- Sys.getenv("HOSOGAYA_BAL_DIR", unset = getwd())

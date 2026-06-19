@@ -1,21 +1,13 @@
 # ============================================================================
 # 20260601_make_Fig5_infection_ROC_RAfactor.R
-# Regenerate the Figure 5 "Infection prediction (RA)" ROC panel so the
-# integrated factor curve is the RA-ONLY MOFA Factor 1 instead of the
-# full-cohort 6-view Factor 2 (IIV).
+# Figure 5 "Infection prediction (RA)" ROC panel: the integrated factor curve
+# is the RA-only MOFA Factor 1 (ra_factors[,1]). Respiratory infection is an
+# outcome defined only within RA, so the integrated axis comes from the RA-only
+# MOFA, not the full-cohort model. Single best biomarker vs the RA-only
+# Factor 1, sharing theme/legend/size with the CT-progression ROC.
 #
-# Rationale: respiratory infection is an outcome defined only WITHIN RA, so the
-# integrated axis should come from the RA-only MOFA (ra_factors[,1]), not from
-# the full-cohort model whose Factor 2 (IIV) is optimised across RA+sarcoidosis.
-# Kept symmetric to the CT-progression ROC (paper Fig 5j / Fig5j block of
-# 06_Comprehensive_Figures.R): a single best biomarker (red) vs the
-# RA-only Factor 1 (purple), same theme/legend/size.
-#
-# Old panel (replaced): BAL Th17.1 (0.870) + IIV (0.750)  [Fig6f_ROC_infection]
-# New panel:            BAL Th17.1 (0.870) + RA Factor 1   [Fig5f_infection_ROC_RAfactor]
-#
-# ROC method = roc(outcome, predictor, direction="auto") verbatim from the
-# canonical pipeline (median-based; AUC can be <0.5). No hardcoded AUCs.
+# ROC method: roc(outcome, predictor, direction="auto") (median-based; AUC can
+# be <0.5). AUCs are computed, not hardcoded.
 # Output: results/panels/Fig5f_infection_ROC_RAfactor.{png,pdf} (80x75mm)
 # ============================================================================
 # Adjust BASEDIR to your local clone of the repository.

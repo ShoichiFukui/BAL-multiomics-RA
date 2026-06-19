@@ -180,8 +180,9 @@ if(nrow(sig_conf) > 0) {
 
 # ============================================================================
 # SECTION 2: DEG with Shrunken LFC
-# Note: Covariate adjustment (age/sex) was attempted but Control group lacks
-# age/sex data (<80% available), so actual design is ~ Group only.
+# Note: Age and sex were comparable between RA and sarcoidosis groups (both
+# p > 0.05; Supplementary Table 1), so they were not included as covariates;
+# the design is ~ Group only.
 # ============================================================================
 cat("\n=== SECTION 2: DEG (Shrunken LFC) ===\n")
 

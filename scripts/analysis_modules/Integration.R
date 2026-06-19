@@ -1,5 +1,5 @@
 # ============================================================================
-# Multi-omics Integration Analysis (MOFA2代替)
+# Multi-omics Integration Analysis (MOFA2 surrogate)
 # 1. Cross-layer correlation network
 # 2. Multi-omics integrated heatmap
 # 3. Multi-omics factor analysis (PCA-based surrogate)

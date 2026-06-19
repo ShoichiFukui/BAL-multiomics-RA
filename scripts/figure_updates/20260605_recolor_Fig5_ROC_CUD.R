@@ -3,15 +3,11 @@
 # Recolor the three Figure 5 ROC panels (5c disease, 5f infection, 5i CT
 # progression) with Color-Universal-Design (CUD) safe colors so the two curves
 # in each panel are easy to tell apart for P/D-type colour vision.
-#   Tokyo CUD guideline recommended accent set (p.7):
-#     single biomarker curve   -> orange  #FF9900  (warm)
-#     integrative MOFA factor  -> blue    #0041FF  (cool)
-#     5c nested-LOOCV reference -> CUD green #35A16B (bluish green, dashed)
-# ONLY the colour values change; all data/logic/AUC/endpoints/titles/positions
-# are reproduced verbatim from the source scripts:
-#   5c  20260604_fix_Fig5c_ROC_endpoints.R
-#   5f  20260601_make_Fig5_infection_ROC_RAfactor.R
-#   5i  06_Comprehensive_Figures.R  (Fig5j_RA_progression_ROC block)
+#   single biomarker curve    -> orange #FF9900 (warm)
+#   integrative MOFA factor   -> blue   #0041FF (cool)
+#   5c nested-LOOCV reference -> green  #35A16B (bluish green, dashed)
+# Only the colour values differ from the source panels; all data, logic, AUCs,
+# endpoints, titles, and positions are unchanged.
 # Overwrites the three panel PNG/PDFs in results/panels/.
 # ============================================================================
 # Adjust BASEDIR to your local clone of the repository.

@@ -21,8 +21,8 @@ scripts/
 │   ├── Infection_Prediction.R              # BAL Th17.1 / OXPHOS infection prediction
 │   ├── CT_Multiomics.R                     # CT-quantified ILD progression analysis
 │   ├── Integration.R                       # cross-layer correlation analysis
-│   ├── MOFA2.R                             # MOFA2 wrapper used by 03_Analysis.R
 │   └── Final7.R                            # final integration outputs
+│   # (the 6-view MOFA2 model is built directly in 03_Analysis.R)
 ├── figure_updates/                          # final panel revisions
 │   ├── 20260601_make_Fig5_infection_ROC_RAfactor.R
 │   ├── 20260604_regen_Fig5_panels_descriptive.R

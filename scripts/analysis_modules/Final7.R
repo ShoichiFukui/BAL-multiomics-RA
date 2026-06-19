@@ -498,7 +498,6 @@ ggsave(file.path(fig_dir,"Fig6_Integration.pdf"),
        width=220,height=240,units="mm",dpi=300)
 cat("  done\n")
 
-# Figure 7 removed — all content integrated into Figures 1-6
-# Key findings → discussed in text; MOFA2 weights → Fig 6i; Th17.1 dual role → Fig 5g-h
+# Figure 7 content integrated into Figures 1-6
 
 cat("\n=== All 6 figures complete ===\n")

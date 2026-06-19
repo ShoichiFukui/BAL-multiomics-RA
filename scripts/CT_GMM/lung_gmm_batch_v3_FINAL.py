@@ -211,19 +211,19 @@ def save_verification_images(volume_array, label_map, lung_mask, output_name, ou
     pt_dir = os.path.join(output_dir, output_name)
     os.makedirs(pt_dir, exist_ok=True)
 
-    # 肺が存在するスライス範囲を特定
+    # Identify the slice range containing lung
     lung_slices = np.where(np.any(lung_mask, axis=(1, 2)))[0]
     if len(lung_slices) == 0: return
 
     z_min, z_max = lung_slices[0], lung_slices[-1]
     z_range = z_max - z_min
 
-    # 肺領域の 10%, 30%, 50%, 70%, 90% の位置のスライスを選択
+    # Select slices at 10%, 30%, 50%, 70%, 90% positions of the lung extent
     percentiles = [0.10, 0.30, 0.50, 0.70, 0.90]
     slice_indices = [int(z_min + z_range * p) for p in percentiles]
     slice_labels = ["upper", "upper_mid", "middle", "lower_mid", "lower"]
 
-    # GMM ラベル用カラーマップ: 0=透明, 1=黒(Air), 2=青(Healthy), 3=黄(GGO), 4=橙(Consol), 5=赤(Dense)
+    # GMM label colormap: 0=transparent, 1=Air, 2=Healthy, 3=GGO, 4=Consolidation, 5=Dense
     colors_rgba = [
         (0, 0, 0, 0),        # 0: background (transparent)
         (0, 0, 0, 0.4),      # 1: Air (dark, semi-transparent)
@@ -242,19 +242,19 @@ def save_verification_images(volume_array, label_map, lung_mask, output_name, ou
 
         fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
-        # 左: CT のみ
+        # Left: CT only
         axes[0].imshow(ct_slice, cmap='gray', vmin=-1000, vmax=400)
         axes[0].set_title(f'CT (slice {z})', fontsize=12)
         axes[0].axis('off')
 
-        # 中: CT + GMM オーバーレイ
+        # Middle: CT + GMM overlay
         axes[1].imshow(ct_slice, cmap='gray', vmin=-1000, vmax=400)
         masked_lbl = np.ma.masked_where(lbl_slice == 0, lbl_slice)
         axes[1].imshow(masked_lbl, cmap=gmm_cmap, vmin=0, vmax=5, interpolation='nearest')
         axes[1].set_title(f'CT + GMM overlay ({label})', fontsize=12)
         axes[1].axis('off')
 
-        # 右: GMM ラベルのみ
+        # Right: GMM labels only
         label_colors_solid = [
             (0, 0, 0),        # 0: background
             (0.2, 0.2, 0.2),  # 1: Air
@@ -268,7 +268,7 @@ def save_verification_images(volume_array, label_map, lung_mask, output_name, ou
         axes[2].set_title(f'GMM labels ({label})', fontsize=12)
         axes[2].axis('off')
 
-        # 凡例
+        # Legend
         legend_text = "  ".join([f"{i}: {n}" for i, n in enumerate(TISSUE_NAMES, 1)])
         fig.text(0.5, 0.02, legend_text, ha='center', fontsize=10,
                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
@@ -411,8 +411,8 @@ def process_one_study(folder_name, dicom_dir, study_date, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description="Lung GMM v3 (Multi-date + Verification)")
-    parser.add_argument("--test", action="store_true", help="最初のフォルダのみ")
-    parser.add_argument("--patient", type=str, help="特定フォルダ名")
+    parser.add_argument("--test", action="store_true", help="Process only the first folder")
+    parser.add_argument("--patient", type=str, help="Specific folder name")
     parser.add_argument("--input", type=str, default=INPUT_DIR)
     parser.add_argument("--output", type=str, default=OUTPUT_DIR)
     args = parser.parse_args()

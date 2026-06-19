@@ -7,13 +7,13 @@ message: >
   If you use this software, please cite both the manuscript and this software.
 type: software
 authors:
+  - family-names: Fukui
+    given-names: Shoichi
+    affiliation: Nagasaki University Hospital
+    orcid: ""
   - family-names: Hosogaya
     given-names: Naoki
     affiliation: Nagasaki University Hospital
-  - family-names: Fukui
-    given-names: Saeko
-    affiliation: Nagasaki University Hospital
-    orcid: ""
 preferred-citation:
   type: article
   title: >
@@ -21,10 +21,10 @@ preferred-citation:
     arthritis identifies compartmentalized Th17-lineage signatures predicting
     infection and interstitial lung disease progression
   authors:
+    - family-names: Fukui
+      given-names: Shoichi
     - family-names: Hosogaya
       given-names: Naoki
-    - family-names: Fukui
-      given-names: Saeko
   journal: "Nature Communications"
   year: 2026
   status: "Under review"
@@ -38,4 +38,9 @@ keywords:
   - MOFA2
   - BayesPrism
 license: MIT
-repository-code: "https://github.com/sfukui/Hosogaya_BAL"
+repository-code: "https://github.com/ShoichiFukui/BAL-multiomics-RA"
+doi: "10.5281/zenodo.20699675"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20699675"
+    description: Concept DOI (all versions)

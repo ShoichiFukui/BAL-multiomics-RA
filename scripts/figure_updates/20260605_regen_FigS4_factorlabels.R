@@ -1,6 +1,5 @@
-# Regenerate ONLY Supplementary Fig 4 (medication confounding) with axis labels
-# changed from IDD/IIV -> "Factor 1"/"Factor 2" (acronym abolition). Identical
-# layout/colors/stats to 20260519_regen_FigS3_S4.R; FigS3 left untouched.
+# Regenerate Supplementary Fig 4 (medication confounding) with the MOFA factor
+# axis labels as "Factor 1" / "Factor 2".
 suppressPackageStartupMessages({library(tidyverse);library(ggplot2);library(patchwork)})
 # Adjust BASEDIR to your local clone of the repository.
 BASEDIR <- Sys.getenv("HOSOGAYA_BAL_DIR", unset = getwd())
@@ -21,7 +20,7 @@ load("results/RA_ILD_Workspace.RData"); load("results/MOFA2_6views_Results.RData
 ct_data<-read.csv("results/tables/master_data_with_CT_all.csv"); ct_unique<-ct_data[!duplicated(ct_data$Sample_ID),]
 ra_samples<-setdiff(rownames(factors)[grepl("^(KY[0-9]|RA[0-9])",rownames(factors))],EXCL)
 med_cols<-c("steroid.1.0.","MTX","NSAIDS"); med_labels<-c("GC","MTX","NSAIDs")
-factor_names<-c("Factor 1","Factor 2")   # was c("IDD","IIV")
+factor_names<-c("Factor 1","Factor 2")
 plots_s4<-list(); pi<-1
 for(fi in 1:2){ fn<-factor_names[fi]; fac_vals<-factors[ra_samples,fi]
   for(mi in seq_along(med_cols)){ mc<-med_cols[mi]; ml<-med_labels[mi]

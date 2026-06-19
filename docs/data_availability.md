@@ -79,7 +79,7 @@ conditions in Section 2.
 
 ## 5. Contact
 
-- Corresponding author: Saeko Fukui, M.D., Ph.D.
+- Corresponding author: Naoki Hosogaya, M.D., Ph.D.
 - Affiliation: Clinical Research Center, Nagasaki University Hospital
 - For data access requests, please email the corresponding author and include
   "BAL multi-omics data request" in the subject line.

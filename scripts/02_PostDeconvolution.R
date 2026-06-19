@@ -63,7 +63,8 @@ if(any(duplicated(new_names))) {
   microbiome_raw <- microbiome_agg
 }
 
-clinical_data <- read_excel(file.path(data_dir, "RA肺細菌叢解析20240430BALF.xlsx"), sheet="Analysis")
+# NOTE: rename the source clinical/microbiome data file to this ASCII filename to match.
+clinical_data <- read_excel(file.path(data_dir, "RA_BALF_microbiome_clinical_20240430.xlsx"), sheet="Analysis")
 colnames(clinical_data)[1] <- "Sample_ID"
 colnames(clinical_data) <- gsub(" ", "_", colnames(clinical_data))
 clinical_colnames <- c("Sample_ID","respiratory_infection","Age","Age_over_65","ra_diagnosis",
@@ -201,15 +202,15 @@ if("respiratory_infection" %in% colnames(master_data)) {
 if("Total_Score" %in% colnames(master_data)) {
   master_data$ILD_Score <- as.numeric(master_data$Total_Score)
   
-  # ILD列を Total_Score ベースで再定義（ct_data由来の旧ILD列を上書き）
+  # Redefine the ILD column based on Total_Score (overwrites the old ILD column from ct_data)
   master_data$ILD <- ifelse(master_data$ILD_Score > 0, 1, 0)
-  
-  # ILD_Group: Total_Score > 0 をILD陽性とする
+
+  # ILD_Group: Total_Score > 0 is ILD-positive
   master_data$ILD_Group <- factor(
     ifelse(master_data$ILD_Score > 0, "ILD_Positive", "ILD_Negative"),
     levels = c("ILD_Negative", "ILD_Positive"))
   
-  # RA群内のILDサブグループ（3群比較用）
+  # ILD subgroups within RA (for 3-group comparison)
   master_data$Subgroup <- dplyr::case_when(
     master_data$Sample_Group == "Control" ~ "Control",
     master_data$ILD_Score > 0             ~ "RA_ILD",
@@ -306,7 +307,7 @@ res_df <- as.data.frame(res) %>% mutate(Gene_Symbol=rownames(res)) %>%
   left_join(gene_annotations[,c("Gene_Symbol","ENTREZID","GENENAME")], by="Gene_Symbol") %>% arrange(padj)
 res_df$Regulation <- "NS"
 res_df$Regulation[res_df$padj<0.05 & res_df$log2FoldChange>1] <- "Up"
-res_df$Regulation[res_df$padj<0.05 & res_df$log2FoldChange < (-1)] <- "Down"  # 修正：括弧を追加
+res_df$Regulation[res_df$padj<0.05 & res_df$log2FoldChange < (-1)] <- "Down"
 safe_write(res_df, "results/tables/DEG_RA_vs_Control.csv", row.names=FALSE)
 cat(sprintf("  DEGs: %d up, %d down\n", sum(res_df$Regulation=="Up",na.rm=TRUE),
             sum(res_df$Regulation=="Down",na.rm=TRUE)))
@@ -387,11 +388,11 @@ tryCatch({
   loocv_samples <- intersect(intersect(rownames(expr_mat),rownames(cyto_mat)),rownames(facs_mat))
   loocv_data <- data.frame(expr_mat[loocv_samples,1:min(50,ncol(expr_mat))], cyto_mat[loocv_samples,],
                            facs_mat[loocv_samples,], Group=meta$Sample_Group[match(loocv_samples,meta$Sample_ID)])
-  loocv_data <- loocv_data[!is.na(loocv_data$Group), ]                    # FIX: stats::filter衝突回避
-  loocv_data$Group <- factor(loocv_data$Group)                             # FIX: levels()がNULL問題
+  loocv_data <- loocv_data[!is.na(loocv_data$Group), ]                    # base subset to avoid stats::filter collision
+  loocv_data$Group <- factor(loocv_data$Group)                             # ensure factor levels are not NULL
   for(col in setdiff(colnames(loocv_data),"Group"))
     loocv_data[[col]][is.na(loocv_data[[col]])|is.infinite(loocv_data[[col]])] <- median(loocv_data[[col]],na.rm=TRUE)
-  feature_vars <- apply(loocv_data[, setdiff(colnames(loocv_data),"Group"), drop=FALSE], 2, var, na.rm=TRUE)  # FIX: select衝突回避
+  feature_vars <- apply(loocv_data[, setdiff(colnames(loocv_data),"Group"), drop=FALSE], 2, var, na.rm=TRUE)  # base indexing to avoid dplyr::select collision
   loocv_data <- loocv_data[,c(names(feature_vars[!is.na(feature_vars) & feature_vars>0]),"Group")]
   if(nrow(loocv_data)>=15 && ncol(loocv_data)>=10) {
     n <- nrow(loocv_data); predictions <- rep(NA,n)
@@ -818,12 +819,12 @@ if(deconv_loaded) {
     cell_types_all <- colnames(bp_theta)
     deconv_unique_types <- setdiff(cell_types_all, c("Macrophage","T_cell","Neutrophil","Other","Epithelial"))
     
-    # 3群ラベル (Total_Score ベース)
+    # 3-group label (Total_Score based)
     deconv_subgroup <- factor(
       meta$Subgroup[match(deconv_common, meta$Sample_ID)],
       levels = c("Control", "RA_nonILD", "RA_ILD"))
     
-    # 2群ラベル (RA vs Control)
+    # 2-group label (RA vs Control)
     deconv_group <- factor(
       ifelse(grepl("^(KYC|Sarcoidosis)", deconv_common), "Control", "RA"),
       levels = c("Control", "RA"))
@@ -832,7 +833,7 @@ if(deconv_loaded) {
                                 Subgroup=as.character(deconv_subgroup), deconv_mat[deconv_common,])
     safe_write(deconv_export, "results/tables/Deconvolution_proportions_all.csv", row.names=FALSE)
     
-    # 比較1: RA vs Control
+    # Comparison 1: RA vs Control
     cat("  Comparison 1: RA vs Control\n")
     ra_vs_ctrl_comparison <- data.frame()
     for(ct in deconv_unique_types) {
@@ -853,7 +854,7 @@ if(deconv_loaded) {
       cat(sprintf("    Sig (padj<0.05): %d cell types\n", sum(ra_vs_ctrl_comparison$P_adjusted<0.05)))
     }
     
-    # 比較2: RA-ILD vs RA-nonILD
+    # Comparison 2: RA-ILD vs RA-nonILD
     cat("  Comparison 2: RA-ILD vs RA-nonILD\n")
     ild_vs_nonild_comparison <- data.frame()
     for(ct in deconv_unique_types) {
@@ -874,7 +875,7 @@ if(deconv_loaded) {
       cat(sprintf("    Sig (padj<0.05): %d cell types\n", sum(ild_vs_nonild_comparison$P_adjusted<0.05)))
     }
     
-    # 比較3: RA-ILD vs Control
+    # Comparison 3: RA-ILD vs Control
     cat("  Comparison 3: RA-ILD vs Control\n")
     ild_vs_ctrl_comparison <- data.frame()
     for(ct in deconv_unique_types) {

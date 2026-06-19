@@ -12,7 +12,7 @@
 #   analysis_modules/Enhanced_Analysis.R -> results/tables/*.csv
 #   analysis_modules/CT_Multiomics.R     -> results/CT_Multiomics_Results.RData
 #   analysis_modules/Integration.R       -> results/Integration_Results.RData
-#   analysis_modules/MOFA2.R             -> results/MOFA2_6views_Results.RData
+#   03_Analysis.R (builds 6-view MOFA2)  -> results/MOFA2_6views_Results.RData
 #   05_MOFA2_RA_only.R                   -> results/MOFA2_RA_only_Results.RData
 #
 # Manual panels not generated here:

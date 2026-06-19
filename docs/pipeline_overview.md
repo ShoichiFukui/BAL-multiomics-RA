@@ -49,7 +49,6 @@ between scripts, and the figures / tables that each step produces.
 │    ├─ Infection_Prediction.R     ── BAL Th17.1 / OXPHOS              │
 │    ├─ CT_Multiomics.R            ── CT progression analyses          │
 │    ├─ Integration.R              ── cross-layer correlations          │
-│    ├─ MOFA2.R                    ── MOFA2 wrapper                     │
 │    └─ Final7.R                   ── final integration outputs        │
 │  Outputs:                                                            │
 │    results/tables/*.csv                                       │

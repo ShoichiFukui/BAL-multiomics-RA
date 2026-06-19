@@ -1,11 +1,9 @@
 # ============================================================================
 # 20260604_make_SFig2_infection_ILD_stratified.R
-# Create the Supplementary Fig. 2 "infection × ILD-stratified" panel that the
-# manuscript body actually cites: BAL Th17.1 and GSVA OXPHOS by prospective
-# respiratory-infection status, stratified by baseline ILD status. This
-# replaces the mis-matched CT-progression-stratified panel (FigS2f) that was
-# Confirms the body values (ILD-: Th17.1 p=0.014,
-# OXPHOS p=0.007; ILD+: NS), i.e. the infection biomarkers are ILD-independent.
+# Supplementary Fig. 2 "infection x ILD-stratified" panel: BAL Th17.1 and
+# GSVA OXPHOS by prospective respiratory-infection status, stratified by
+# baseline ILD status. The infection biomarkers are ILD-independent
+# (ILD-: Th17.1 p=0.014, OXPHOS p=0.007; ILD+: NS).
 #
 # Output: results/panels/FigS2_infection_ILD_stratified.{png,pdf}
 # ============================================================================
