@@ -31,6 +31,7 @@ step("02 PostDeconvolution", "02_PostDeconvolution.R")
 
 # --- Step 3: primary analyses (DEG, GSEA, GSVA, infection, CT) ---
 step("03 Analysis", "03_Analysis.R")
+step("03b Nested LOOCV RA vs sarcoidosis (Fig 2l)", "03b_NestedLOOCV_RAvsSarc.R")
 
 # --- Step 4: MOFA2 (full + RA-only) ---
 step("04 MOFA2 full cohort", "04_MOFA2_FullCohort.R")
