@@ -13,6 +13,7 @@ scripts/
 ├── 01_BayesPrism_Deconvolution.R            # scRNA-seq atlas + BayesPrism deconvolution
 ├── 02_PostDeconvolution.R                   # builds RA_ILD_Workspace.RData
 ├── 03_Analysis.R                            # master analysis script (sources analysis_modules/)
+├── 03b_NestedLOOCV_RAvsSarc.R               # fully fold-internal nested LOOCV (Fig 2l, AUC = 0.780)
 ├── 04_MOFA2_FullCohort.R                    # full-cohort MOFA2 (n = 35, 6 views)
 ├── 05_MOFA2_RA_only.R                       # RA-specific MOFA2 (n = 24, 5 views)
 ├── 06_Comprehensive_Figures.R               # generates all primary figure panels
