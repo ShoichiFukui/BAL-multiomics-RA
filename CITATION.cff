@@ -1,11 +1,12 @@
 cff-version: 1.2.0
 title: >
-  Multi-omics characterization of bronchoalveolar lavage fluid in rheumatoid
-  arthritis identifies compartmentalized Th17-lineage signatures predicting
-  infection and interstitial lung disease progression
+  Bronchoalveolar lavage multi-omics identifies immune signatures associated with
+  infection and lung disease progression in rheumatoid arthritis
 message: >
   If you use this software, please cite both the manuscript and this software.
 type: software
+version: "1.1.0"
+date-released: "2026-06-30"
 authors:
   - family-names: Fukui
     given-names: Shoichi
@@ -17,9 +18,8 @@ authors:
 preferred-citation:
   type: article
   title: >
-    Multi-omics characterization of bronchoalveolar lavage fluid in rheumatoid
-    arthritis identifies compartmentalized Th17-lineage signatures predicting
-    infection and interstitial lung disease progression
+    Bronchoalveolar lavage multi-omics identifies immune signatures associated with
+    infection and lung disease progression in rheumatoid arthritis
   authors:
     - family-names: Fukui
       given-names: Shoichi
