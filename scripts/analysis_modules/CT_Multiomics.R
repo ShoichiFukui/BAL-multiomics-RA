@@ -37,14 +37,14 @@ id_map <- data.frame(
   PatientID = as.character(mapping[["ID"]]),
   stringsAsFactors = FALSE
 )
-id_map <- id_map[grepl("^(KY|RA[0-9]|Sarcoidosis)", id_map$Sample_ID), ]
+id_map <- id_map[grepl("^(RA[0-9]|Sarcoidosis)", id_map$Sample_ID), ]
 
 ct_quant <- read_excel("ct_lung_analysis_merged.xlsx", sheet="Merged_Data")
 ct_quant$PatientID <- as.character(ct_quant$PatientID)
 ct_quant$StudyDate <- as.character(ct_quant$StudyDate)
 
 ct_all <- ct_quant %>% inner_join(id_map, by="PatientID") %>%
-  filter(!Sample_ID %in% character(0))  # QC-excluded samples are absent from the released n=35 dataset
+  filter(!Sample_ID %in% character(0))  # released dataset is the final n = 35 cohort (no-op filter)
 
 ct_vars <- c("total_lung_cm3","Air_pct","Healthy_Lung_pct","GGO_pct",
              "Consolidation_pct","Dense_Tissue_pct","lung_involvement_pct",
@@ -235,9 +235,9 @@ if(exists("gsva_scores")) {
 # vs Cytokines (key serum)
 cyto_key <- grep("^BALF_|^Serum_|^PB_", colnames(ra_ct_ext), value=TRUE)
 cyto_key <- cyto_key[!grepl("Treg|Th|Macro|Neutro|Lympho|CD|Percent|Activated", cyto_key)]
-# Also add FACS variables
-facs_key <- grep("^BALF_.*Percent|^BALF_.*Macrophage|^BALF_.*Activated|^PB_.*Th|^PB_.*Treg|^PB_.*Neutro|^BALF_.*Th", colnames(ra_ct_ext), value=TRUE)
-all_biomarkers <- unique(c(cyto_key, facs_key))
+# Also add FCM variables
+fcm_key <- grep("^BALF_.*Percent|^BALF_.*Macrophage|^BALF_.*Activated|^PB_.*Th|^PB_.*Treg|^PB_.*Neutro|^BALF_.*Th", colnames(ra_ct_ext), value=TRUE)
+all_biomarkers <- unique(c(cyto_key, fcm_key))
 for(ct_v in ct_key_vars) {
   for(cy in all_biomarkers) {
     ct_vals <- as.numeric(ra_ct_ext[[ct_v]])
@@ -246,7 +246,7 @@ for(ct_v in ct_key_vars) {
     if(sum(valid) >= 8) {
       sp <- cor.test(ct_vals[valid], cy_vals[valid], method="spearman", exact=TRUE)
       ct_multiomics_cor <- rbind(ct_multiomics_cor, data.frame(
-        CT_Variable=ct_v, Omics_Variable=cy, Category="FACS/Cytokine",
+        CT_Variable=ct_v, Omics_Variable=cy, Category="FCM/Cytokine",
         Spearman_rho=sp$estimate, P_value=sp$p.value, N=sum(valid)))
     }
   }
@@ -256,6 +256,55 @@ ct_multiomics_cor$P_adjusted <- p.adjust(ct_multiomics_cor$P_value, method="BH")
 ct_multiomics_cor <- ct_multiomics_cor %>% arrange(P_value)
 write.csv(ct_multiomics_cor, file.path(out_dir, "tables/CT_vs_Multiomics_correlations.csv"), row.names=FALSE)
 
+# ----------------------------------------------------------------------------
+# Progressor (ΔHealthy Lung < -10%) vs Stable: all-omics group comparison
+#   -> Supplementary Data 7 (progressor-vs-stable group comparison). exact=TRUE Wilcoxon,
+#      Cliff's delta, BH within this family. Makes the Fig 4f biomarker
+#      selection (PB Th17, serum IL-27/IL-8/MDC) fully transparent.
+# ----------------------------------------------------------------------------
+if (exists("ra_ct_ext") && "CT_Delta_Healthy_Lung_pct" %in% colnames(ra_ct_ext)) {
+  cat("\n=== Progressor vs Stable: all-omics group comparison (exact Wilcoxon) ===\n")
+  prog_grp <- ifelse(as.numeric(ra_ct_ext[["CT_Delta_Healthy_Lung_pct"]]) < -10, "Progressor", "Stable")
+  prog_comp <- data.frame()
+  for (cy in grep("^Serum_|^BALF_|^PB_", colnames(ra_ct_ext), value=TRUE)) {
+    v <- as.numeric(ra_ct_ext[[cy]]); o <- !is.na(prog_grp) & !is.na(v)
+    if (sum(o) < 12 || length(unique(prog_grp[o])) < 2) next
+    vp <- v[o & prog_grp == "Progressor"]; vs <- v[o & prog_grp == "Stable"]
+    pv <- tryCatch(suppressWarnings(wilcox.test(vp, vs, exact=TRUE)$p.value), error=function(e) NA_real_)
+    cd <- tryCatch(cliff.delta(vp, vs)$estimate, error=function(e) NA_real_)
+    cat0 <- if (grepl("^Serum_", cy)) "Serum_cytokine" else if (grepl("Th|Treg|CCR6|CD25|CD4|CD8", cy)) "FCM" else "BALF_cytokine"
+    prog_comp <- rbind(prog_comp, data.frame(Variable=cy, Category=cat0,
+      Median_progressor=round(median(vp),4), Median_stable=round(median(vs),4),
+      N_progressor=length(vp), N_stable=length(vs), Cliff_delta=round(as.numeric(cd),4),
+      P_value=as.numeric(pv),
+      Direction=ifelse(median(vp) > median(vs), "Up in progressor", "Down in progressor"),
+      stringsAsFactors=FALSE))
+  }
+  if (exists("gsva_scores")) {
+    for (gs in rownames(gsva_scores)) {
+      v <- setNames(as.numeric(gsva_scores[gs, ]), colnames(gsva_scores))[ra_ct_ext$Sample_ID]
+      o <- !is.na(prog_grp) & !is.na(v)
+      if (sum(o) < 12 || length(unique(prog_grp[o])) < 2) next
+      vp <- v[o & prog_grp == "Progressor"]; vs <- v[o & prog_grp == "Stable"]
+      pv <- tryCatch(suppressWarnings(wilcox.test(vp, vs, exact=TRUE)$p.value), error=function(e) NA_real_)
+      cd <- tryCatch(cliff.delta(vp, vs)$estimate, error=function(e) NA_real_)
+      prog_comp <- rbind(prog_comp, data.frame(Variable=paste0("GSVA_", gs), Category="GSVA_Pathway",
+        Median_progressor=round(median(vp),4), Median_stable=round(median(vs),4),
+        N_progressor=length(vp), N_stable=length(vs), Cliff_delta=round(as.numeric(cd),4),
+        P_value=as.numeric(pv),
+        Direction=ifelse(median(vp) > median(vs), "Up in progressor", "Down in progressor"),
+        stringsAsFactors=FALSE))
+    }
+  }
+  prog_comp <- prog_comp[!is.na(prog_comp$P_value), ]
+  prog_comp <- prog_comp[order(prog_comp$P_value), ]
+  prog_comp$P_adjusted_BH <- round(p.adjust(prog_comp$P_value, "BH"), 4)
+  prog_comp$P_value <- round(prog_comp$P_value, 4)
+  write.csv(prog_comp, file.path(out_dir, "tables/Progression_AllOmics_Comparison.csv"), row.names=FALSE)
+  cat(sprintf("  Progression_AllOmics_Comparison.csv: %d markers, %d with p<0.05\n",
+              nrow(prog_comp), sum(prog_comp$P_value < 0.05)))
+}
+
 cat(sprintf("  Total correlations tested: %d\n", nrow(ct_multiomics_cor)))
 cat(sprintf("  Significant (padj<0.05): %d\n", sum(ct_multiomics_cor$P_adjusted < 0.05)))
 cat("\n  Top 15 correlations:\n")
@@ -263,126 +312,6 @@ for(i in 1:min(15, nrow(ct_multiomics_cor)))
   cat(sprintf("    %-30s × %-25s rho=%+.3f p=%.4f padj=%.4f\n",
       ct_multiomics_cor$CT_Variable[i], ct_multiomics_cor$Omics_Variable[i],
       ct_multiomics_cor$Spearman_rho[i], ct_multiomics_cor$P_value[i], ct_multiomics_cor$P_adjusted[i]))
-
-# ============================================================================
-# PART 6: Elastic Net — ILD_Score prediction with CT + omics
-# ============================================================================
-cat("\n=== PART 6: Elastic Net with CT + Omics ===\n")
-
-ra_samples_en <- intersect(common_samples[meta$Sample_Group=="RA"],
-                            master_ext$Sample_ID[!is.na(master_ext$CT_T1_GGO_pct)])
-cat(sprintf("  RA samples with CT + omics: %d\n", length(ra_samples_en)))
-
-if(length(ra_samples_en) >= 12) {
-  # Feature matrix: CT T1 + Delta + top expression + cytokines + FACS + deconvolution + GSVA
-  feature_list <- list()
-
-  # CT T1
-  ct_t1_cols <- grep("^CT_T1_", colnames(master_ext), value=TRUE)
-  ct_t1_cols <- ct_t1_cols[!grepl("Date", ct_t1_cols)]
-  ct_t1_data <- master_ext[match(ra_samples_en, master_ext$Sample_ID), ct_t1_cols]
-  for(col in colnames(ct_t1_data)) ct_t1_data[[col]] <- as.numeric(ct_t1_data[[col]])
-  feature_list$CT_T1 <- ct_t1_data
-
-  # CT Delta (if available)
-  ct_delta_cols <- grep("^CT_Delta_", colnames(master_ext), value=TRUE)
-  ct_delta_cols <- ct_delta_cols[!grepl("Days", ct_delta_cols)]
-  if(length(ct_delta_cols) > 0) {
-    ct_d_data <- master_ext[match(ra_samples_en, master_ext$Sample_ID), ct_delta_cols]
-    for(col in colnames(ct_d_data)) ct_d_data[[col]] <- as.numeric(ct_d_data[[col]])
-    feature_list$CT_Delta <- ct_d_data
-  }
-
-  # Expression (top 50)
-  expr_en <- expr_mat[ra_samples_en, 1:min(50, ncol(expr_mat))]
-  feature_list$Expression <- as.data.frame(expr_en)
-
-  # Cytokines
-  cyto_en <- cyto_mat[ra_samples_en, ]
-  feature_list$Cytokines <- as.data.frame(cyto_en)
-
-  # FACS
-  facs_en <- facs_mat[ra_samples_en, ]
-  feature_list$FACS <- as.data.frame(facs_en)
-
-  # Deconvolution
-  if(exists("deconv_mat") && all(ra_samples_en %in% rownames(deconv_mat))) {
-    deconv_en <- as.data.frame(deconv_mat[ra_samples_en, ])  # already in %
-    colnames(deconv_en) <- paste0("Deconv_", colnames(deconv_en))
-    feature_list$Deconvolution <- deconv_en
-  }
-
-  # GSVA
-  if(exists("gsva_scores") && all(ra_samples_en %in% colnames(gsva_scores))) {
-    gsva_en <- as.data.frame(t(gsva_scores[, ra_samples_en]))
-    colnames(gsva_en) <- paste0("GSVA_", colnames(gsva_en))
-    feature_list$GSVA <- gsva_en
-  }
-
-  # Combine
-  X_all <- do.call(cbind, feature_list)
-  X_all[is.na(X_all)] <- 0
-  X_all[!is.finite(as.matrix(X_all))] <- 0
-
-  # Remove zero-variance
-  fv <- apply(X_all, 2, var, na.rm=TRUE)
-  X_all <- X_all[, !is.na(fv) & fv > 0]
-
-  y <- as.numeric(master_ext$ILD_Score[match(ra_samples_en, master_ext$Sample_ID)])
-
-  cat(sprintf("  Features: %d (CT:%d, Expr:%d, Cyto:%d, FACS:%d, Deconv:%d, GSVA:%d)\n",
-      ncol(X_all),
-      sum(grepl("^CT_", colnames(X_all))),
-      sum(grepl("^[A-Z].*\\.", colnames(X_all)) & !grepl("^CT_|^BALF_|^Serum_|^Deconv_|^GSVA_", colnames(X_all))),
-      sum(grepl("^BALF_|^Serum_", colnames(X_all)) & !grepl("Treg|Th|Macro|Neutro", colnames(X_all))),
-      sum(grepl("^BALF_.*Treg|^BALF_.*Th|^PB_", colnames(X_all))),
-      sum(grepl("^Deconv_", colnames(X_all))),
-      sum(grepl("^GSVA_", colnames(X_all)))))
-
-  # Elastic Net (alpha=0.5)
-  X_mat <- as.matrix(X_all)
-  cv_fit <- cv.glmnet(X_mat, y, alpha=0.5, nfolds=min(10, length(y)))
-  coefs <- coef(cv_fit, s="lambda.min")
-  nonzero <- which(coefs[-1, 1] != 0)
-  en_features <- data.frame(
-    Feature = rownames(coefs)[-1][nonzero],
-    Coefficient = coefs[-1, 1][nonzero]
-  ) %>% arrange(desc(abs(Coefficient)))
-
-  # Feature type
-  en_features$Type <- case_when(
-    grepl("^CT_", en_features$Feature) ~ "CT",
-    grepl("^Deconv_", en_features$Feature) ~ "Deconvolution",
-    grepl("^GSVA_", en_features$Feature) ~ "GSVA",
-    grepl("^BALF_|^Serum_", en_features$Feature) ~ "Cytokine/FACS",
-    TRUE ~ "Expression"
-  )
-
-  write.csv(en_features, file.path(out_dir, "tables/ElasticNet_CT_Multiomics_features.csv"), row.names=FALSE)
-
-  cat(sprintf("  Selected features: %d\n", nrow(en_features)))
-  cat("  Feature type breakdown:\n")
-  print(table(en_features$Type))
-
-  cat("\n  Top 15 features:\n")
-  for(i in 1:min(15, nrow(en_features)))
-    cat(sprintf("    %-40s %+8.4f [%s]\n", en_features$Feature[i], en_features$Coefficient[i], en_features$Type[i]))
-
-  # LOOCV
-  loocv_pred <- numeric(length(y))
-  for(i in 1:length(y)) {
-    cv_i <- cv.glmnet(X_mat[-i, ], y[-i], alpha=0.5, nfolds=min(10, length(y)-1))
-    loocv_pred[i] <- predict(cv_i, newx=X_mat[i, , drop=FALSE], s="lambda.min")
-  }
-  loocv_cor <- cor.test(y, loocv_pred, method="spearman", exact=TRUE)
-  loocv_r2 <- 1 - sum((y - loocv_pred)^2) / sum((y - mean(y))^2)
-
-  cat(sprintf("\n  LOOCV: rho=%.3f (p=%.4f), R2=%.3f\n",
-      loocv_cor$estimate, loocv_cor$p.value, loocv_r2))
-
-  report_en <- list(n_features=nrow(en_features), features=en_features,
-                     loocv_rho=loocv_cor$estimate, loocv_p=loocv_cor$p.value, loocv_r2=loocv_r2)
-}
 
 # ============================================================================
 # PART 7: CT Progression Heatmap
@@ -423,6 +352,9 @@ tryCatch({
 cat("\n╔═══════════════════════════════════════════════════════════════╗\n")
 cat("║  Complete                                                      ║\n")
 cat("╚═══════════════════════════════════════════════════════════════╝\n\n")
+
+# CT-integrated master table consumed by 06_Comprehensive_Figures.R (figure rendering).
+write.csv(master_ext, file.path(out_dir, "tables/master_data_with_CT_all.csv"), row.names=FALSE)
 
 save(master_ext, ct_integrated, delta_df, ct_all, ct_comparison,
      ct_ild_cor, ct_multiomics_cor,

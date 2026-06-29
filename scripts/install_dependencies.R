@@ -1,6 +1,6 @@
 # ============================================================================
 # install_dependencies.R
-# One-shot installation of all R packages used in the Hosogaya BAL multi-omics
+# One-shot installation of all R packages used in the BAL multi-omics
 # analysis pipeline. Run once before executing any of the analysis scripts.
 #
 # Usage:  Rscript install_dependencies.R

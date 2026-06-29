@@ -1,5 +1,5 @@
 # ============================================================================
-# Nature Communications — 7 Main Figures (Final with MOFA2 Integration)
+# Integration_Outputs.R — final cross-layer integration outputs and figure data
 # ============================================================================
 if (!exists("BASEDIR")) BASEDIR <- getwd()
 setwd(BASEDIR)
@@ -79,7 +79,7 @@ bvp <- function(bc,pc,nm,ttl) {
 samples <- common_samples
 pca <- prcomp(t(expr_matrix),scale.=T); ve <- summary(pca)$importance[2,1:5]*100
 pd <- data.frame(PC1=pca$x[,1],PC2=pca$x[,2],SID=rownames(pca$x))%>%
-  mutate(Group=ifelse(grepl("^(KYC|Sarcoidosis)",SID),"Sarcoidosis","RA"),
+  mutate(Group=ifelse(grepl("^Sarcoidosis",SID),"Sarcoidosis","RA"),
          Sub=recode(as.character(meta$Subgroup[match(SID,meta$Sample_ID)]),"Control"="Sarcoidosis","RA_nonILD"="RA-nonILD","RA_ILD"="RA-ILD"),
          InfSt=recode(as.character(meta$Infection_Group[match(SID,meta$Sample_ID)]),"Infection_Negative"="Infection (-)","Infection_Positive"="Infection (+)"))
 xl<-sprintf("PC1 (%.1f%%)",ve[1]); yl<-sprintf("PC2 (%.1f%%)",ve[2])
@@ -185,8 +185,8 @@ f2d<-ggplot(glg,aes(S,PW,fill=Sc))+geom_tile()+scale_fill_gradient2(low="#2980B9
   labs(x="",y="",title="d  GSVA")+tn(5)+theme(axis.text.x=element_text(angle=55,hjust=1,size=3),axis.text.y=element_text(size=5))
 
 # ROC
-lo_s<-intersect(intersect(rownames(expr_mat),rownames(cyto_mat)),rownames(facs_mat))
-lo_d<-data.frame(expr_mat[lo_s,1:min(50,ncol(expr_mat))],cyto_mat[lo_s,],facs_mat[lo_s,],Group=meta$Sample_Group[match(lo_s,meta$Sample_ID)])
+lo_s<-intersect(intersect(rownames(expr_mat),rownames(cyto_mat)),rownames(fcm_mat))
+lo_d<-data.frame(expr_mat[lo_s,1:min(50,ncol(expr_mat))],cyto_mat[lo_s,],fcm_mat[lo_s,],Group=meta$Sample_Group[match(lo_s,meta$Sample_ID)])
 lo_d<-lo_d[!is.na(lo_d$Group),];lo_d$Group<-factor(lo_d$Group)
 for(cc in setdiff(colnames(lo_d),"Group"))lo_d[[cc]][is.na(lo_d[[cc]])|is.infinite(lo_d[[cc]])]<-median(lo_d[[cc]],na.rm=T)
 fvv<-apply(lo_d[,setdiff(colnames(lo_d),"Group"),drop=F],2,var,na.rm=T);lo_d<-lo_d[,c(names(fvv[!is.na(fvv)&fvv>0]),"Group")]
@@ -205,7 +205,7 @@ ses<-es%>%filter(!is.na(p_adjusted),p_adjusted<.05)%>%mutate(L=gsub("^BALF_|^Ser
 f2f<-ggplot(ses,aes(cliff_delta,L,fill=Src))+geom_col(width=.5)+scale_fill_manual(values=c(Serum="#E74C3C",BALF="#3498DB"))+
   geom_vline(xintercept=0,linewidth=.2)+labs(x="Cliff's delta",y="",title="f",fill="")+tn(6.5)+theme(legend.position="top",axis.text.y=element_text(size=5.5))
 
-ga_pl<-ifelse(grepl("^(KYC|Sarcoidosis)",rownames(bp_theta)),"Sarcoidosis","RA")
+ga_pl<-ifelse(grepl("^Sarcoidosis",rownames(bp_theta)),"Sarcoidosis","RA")
 dp<-data.frame(P=bp_theta[,"Plasma"]*100,B=bp_theta[,"B_cell"]*100,G=ga_pl);dp$Ratio<-dp$P/(dp$B+dp$P+1e-10)*100
 wtp<-wilcox.test(dp$P[dp$G=="RA"],dp$P[dp$G=="Sarcoidosis"], exact=TRUE)
 f2g<-ggplot(dp,aes(G,P+1e-6,fill=G))+geom_boxplot(outlier.shape=NA,width=.4,linewidth=.2)+geom_jitter(width=.07,size=1,alpha=.5,show.legend=F)+
@@ -226,15 +226,15 @@ cat("  done\n")
 # Fig 3: Deconvolution + BAL vs PB (10 panels)
 # ============================================================================
 cat("Fig 3...\n")
-bp_l<-bp_cell%>%rownames_to_column("S")%>%mutate(G=ifelse(grepl("^(KYC|Sarcoidosis)",S),"Sarcoidosis","RA"))%>%
-  mutate(S_display=ifelse(grepl("^(KYC|Sarcoidosis)",S),paste0("Sarcoidosis",gsub("^(KYC0*|Sarcoidosis)","",S)),paste0("RA",gsub("^(KY0*|RA)","",S))))%>%
+bp_l<-bp_cell%>%rownames_to_column("S")%>%mutate(G=ifelse(grepl("^Sarcoidosis",S),"Sarcoidosis","RA"))%>%
+  mutate(S_display=ifelse(grepl("^Sarcoidosis",S),paste0("Sarcoidosis",gsub("^Sarcoidosis","",S)),paste0("RA",gsub("^RA","",S))))%>%
   pivot_longer(-c(S,G,S_display),names_to="CT",values_to="Fr")%>%mutate(S_display=fct_reorder(S_display,as.numeric(factor(G))))
 f3a<-ggplot(bp_l,aes(S_display,Fr,fill=CT))+geom_col(width=.85)+scale_fill_manual(values=CC)+
   labs(x="",y="Proportion",title="a",fill="")+tn(6)+theme(axis.text.x=element_text(angle=55,hjust=1,size=3.5),legend.position="bottom",legend.direction="horizontal",legend.text=element_text(size=5))
 
 cf<-intersect(rownames(bp_cell),fcm$Sample_ID);fi<-match(cf,fcm$Sample_ID);lc<-intersect(c("T_cell","NK","B_cell","Plasma"),colnames(bp_cell))
 mkf<-function(bv,fv,lb,tt){v<-!is.na(fv)&!is.na(bv);sp<-cor.test(bv[v],fv[v],method="spearman",exact=TRUE)
-  df<-data.frame(F=fv[v],B=bv[v],G=ifelse(grepl("^(KYC|Sarcoidosis)",cf[v]),"Sarcoidosis","RA"))
+  df<-data.frame(F=fv[v],B=bv[v],G=ifelse(grepl("^Sarcoidosis",cf[v]),"Sarcoidosis","RA"))
   ggplot(df,aes(F,B,color=G))+geom_point(size=1.2,alpha=.8)+geom_smooth(method="lm",se=F,color="grey30",linewidth=.3,linetype="dashed",formula=y~x,inherit.aes=F,aes(x=F,y=B))+
     geom_abline(slope=1,intercept=0,linetype="dotted",color="grey60")+scale_color_manual(values=CG)+
     annotate("text",x=Inf,y=-Inf,hjust=1.05,vjust=-.3,size=1.8,label=sprintf("rho=%.3f\np=%.4f",sp$estimate,sp$p.value))+
@@ -380,124 +380,3 @@ ggsave(file.path(fig_dir,"Fig5_CT_Th171.pdf"),arrangeGrob(f5a,f5b,f5c,f5d,f5e,f5
        width=220,height=170,units="mm",dpi=300)
 cat("  done\n")
 
-# ============================================================================
-# Fig 6: Multi-omics Integration (MOFA2 + Ablation) — 8 panels
-# ============================================================================
-cat("Fig 6...\n")
-
-# Load MOFA2 6-view results
-if(file.exists("results/MOFA2_6views_Results.RData")) {
-  e6 <- new.env(); load("results/MOFA2_6views_Results.RData", envir=e6)
-
-  # a: R2 heatmap
-  r2m<-e6$r2$r2_per_factor[[1]];r2l<-as.data.frame(r2m)%>%rownames_to_column("Factor")%>%pivot_longer(-Factor,names_to="View",values_to="R2")
-  r2l$Factor<-factor(r2l$Factor,levels=rownames(r2m))
-  f6a<-ggplot(r2l,aes(View,Factor,fill=R2))+geom_tile(color="white")+scale_fill_gradient(low="white",high="#C0392B",name="R2(%)")+
-    geom_text(aes(label=sprintf("%.1f",R2)),size=1.8)+labs(x="",y="",title="a  MOFA2 (6 independent views)")+
-    tn(7)+theme(axis.text.x=element_text(angle=35,hjust=1,size=6))
-
-  # b: Factor scatter
-  group_m<-ifelse(grepl("^(KYC|Sarcoidosis)",rownames(e6$factors)),"Sarcoidosis","RA")
-  df_m<-data.frame(F1=e6$factors[,1],F2=e6$factors[,2],Group=group_m)
-  f6b<-ggplot(df_m,aes(F1,F2,color=Group))+geom_point(size=2.5,alpha=.8)+stat_ellipse(level=.95,linewidth=.5)+
-    scale_color_manual(values=CG)+labs(x="Factor 1",y="Factor 2",title="b",color="")+tn()+theme(legend.position="bottom")
-
-  # c: Disease factor boxplot
-  sf6<-e6$fd$Factor[e6$fd$p_disease<.1];if(length(sf6)==0)sf6<-1:2
-  fb6<-data.frame();for(f in sf6)fb6<-rbind(fb6,data.frame(Factor=sprintf("F%d",f),Value=e6$factors[,f],Group=group_m))
-  fb6$Group<-recode(fb6$Group,"Sarcoidosis"="Sarcoidosis")
-  f6c<-ggplot(fb6,aes(Group,Value,fill=Group))+geom_boxplot(outlier.shape=NA,width=.4,linewidth=.2)+
-    geom_jitter(width=.07,size=1,alpha=.5,show.legend=F)+scale_fill_manual(values=c("RA"="#C0392B","Sarcoidosis"="#2980B9"))+facet_wrap(~Factor,scales="free_y")+
-    labs(x="",y="Factor value",title="c  Disease")+tn(7)+theme(legend.position="none")
-
-  # d: Infection factor boxplot
-  inf_m<-master_data$respiratory_infection[match(rownames(e6$factors),master_data$Sample_ID)]
-  sfi6<-e6$fi$Factor[e6$fi$p_infection<.1];if(length(sfi6)==0)sfi6<-1:2
-  ib6<-data.frame();for(f in sfi6){m<-group_m=="RA"&!is.na(inf_m)
-    ib6<-rbind(ib6,data.frame(Factor=sprintf("F%d",f),Value=e6$factors[m,f],IG=ifelse(inf_m[m]==1,"Infection (+)","Infection (-)")))}
-  f6d<-ggplot(ib6,aes(IG,Value,fill=IG))+geom_boxplot(outlier.shape=NA,width=.4,linewidth=.2)+
-    geom_jitter(width=.07,size=1,alpha=.5,show.legend=F)+scale_fill_manual(values=CI)+facet_wrap(~Factor,scales="free_y")+
-    labs(x="",y="Factor value",title="d  Infection (p=0.077)")+tn(7)+theme(legend.position="none",axis.text.x=element_text(size=5))
-}
-
-# e: Layer Ablation AUC
-if(file.exists("results/tables/LayerAblation_7layers_AUC.csv")) {
-  abl<-read.csv("results/tables/LayerAblation_7layers_AUC.csv")
-  abl$Model<-fct_reorder(abl$Model,abl$AUC)
-  abl$Type<-recode(abl$Type,"Single"="1-layer","Combined"="Full","Ablation"="Leave-out")
-  abl$Type<-factor(abl$Type,levels=c("1-layer","Full","Leave-out"))
-  f6e<-ggplot(abl,aes(AUC,Model,fill=Type))+geom_col(width=.55)+
-    scale_fill_manual(values=c("1-layer"="#3498DB","Full"="#C0392B","Leave-out"="#E67E22"))+
-    geom_vline(xintercept=.5,linetype="dashed",color="grey60",linewidth=.2)+
-    labs(x="LOOCV AUC",y="",title="e  Layer ablation",fill="")+xlim(0,1)+
-    tn(7)+theme(legend.position="bottom",axis.text.y=element_text(size=5.5),legend.text=element_text(size=6))
-}
-
-# f: Cross-layer network
-if(file.exists("results/Integration_Results.RData")) {
-  load("results/Integration_Results.RData")
-  edge_sum<-edges%>%mutate(Pair=paste(pmin(Layer1,Layer2),"-",pmax(Layer1,Layer2)))%>%
-    group_by(Pair)%>%summarise(N=n(),.groups="drop")%>%arrange(desc(N))
-  edge_sum$Pair<-fct_reorder(edge_sum$Pair,edge_sum$N)
-  f6f<-ggplot(edge_sum,aes(N,Pair))+geom_col(fill="#34495E",width=.55)+
-    labs(x="Edges (|rho|>0.5)",y="",title="f  Network")+tn(7)+theme(axis.text.y=element_text(size=5.5))
-}
-
-# g: Integrated heatmap (simplified)
-gm_all<-gsva_scores[,common_samples]
-so_all<-common_samples[order(meta$Sample_Group[match(common_samples,meta$Sample_ID)])]
-glg_all<-as.data.frame(gm_all)%>%rownames_to_column("PW")%>%pivot_longer(-PW,names_to="S",values_to="Sc")
-glg_all$S_d<-ifelse(grepl("^(KYC|Sarcoidosis)",glg_all$S),paste0("Sarcoidosis",gsub("^(KYC0*|Sarcoidosis)","",glg_all$S)),paste0("RA",gsub("^(KY0*|RA)","",glg_all$S)))
-so_d<-ifelse(grepl("^(KYC|Sarcoidosis)",so_all),paste0("Sarcoidosis",gsub("^(KYC0*|Sarcoidosis)","",so_all)),paste0("RA",gsub("^(KY0*|RA)","",so_all)))
-glg_all$S_d<-factor(glg_all$S_d,levels=so_d)
-f6g<-ggplot(glg_all,aes(S_d,PW,fill=Sc))+geom_tile()+scale_fill_gradient2(low="#2980B9",mid="white",high="#C0392B",midpoint=0,name="Score")+
-  labs(x="",y="",title="g  GSVA overview")+tn(5)+theme(axis.text.x=element_text(angle=55,hjust=1,size=3),axis.text.y=element_text(size=5))
-
-# h: AUC summary comparison
-auc_comp<-data.frame(
-  Model=c("RA vs Sarcoidosis\n(multi-omics)","BALF Th17.1\n(infection)","BAL/PB Th17.1\nratio","GSVA OXPHOS","BALF MCP3","PB Th17.1\nvs CT Delta"),
-  AUC_or_rho=c(0.962,0.870,0.861,0.861,0.866,0.484),
-  Type=c("AUC","AUC","AUC","AUC","AUC","rho"))
-auc_comp$Model<-fct_inorder(auc_comp$Model)
-f6h<-ggplot(auc_comp%>%filter(Type=="AUC"),aes(AUC_or_rho,Model))+geom_col(fill="#C0392B",width=.5)+
-  geom_vline(xintercept=.5,linetype="dashed",color="grey60",linewidth=.2)+
-  labs(x="AUC",y="",title="h  Performance")+xlim(0,1)+tn(7)+theme(axis.text.y=element_text(size=6))
-
-# i: MOFA2 Factor 1 feature weights
-if(file.exists("results/MOFA2_6views_Results.RData")) {
-  e7 <- new.env(); load("results/MOFA2_6views_Results.RData", envir=e7)
-  fw1 <- data.frame()
-  for(v in names(e7$weights)) {
-    wv <- e7$weights[[v]][, 1]
-    df_v <- data.frame(Feature=names(wv), Weight=as.numeric(wv), View=v, stringsAsFactors=FALSE)
-    fw1 <- rbind(fw1, df_v)
-  }
-  fw1$AbsW <- abs(fw1$Weight)
-  fw1_top <- fw1 %>% arrange(desc(AbsW)) %>% head(15)
-  fw1_top$Feature <- gsub("^BALF_|^Serum_|^PB_", "", fw1_top$Feature)
-  fw1_top$Feature <- gsub("_CCR6.*|_CD127.*|_CD86.*|_CD66.*|_CD14pos.*", "", fw1_top$Feature)
-  fw1_top$Feature <- fct_reorder(fw1_top$Feature, fw1_top$AbsW)
-  fw1_top$View <- recode(fw1_top$View, "Serum_Cytokine"="Serum", "BALF_Cytokine"="BALF Cyto",
-                          "BALF_FACS"="BALF FACS", "PB_FACS"="PB FACS",
-                          "Expression"="Expr", "Microbiome"="Micro")
-  view_cols <- c("Serum"="#E74C3C", "BALF Cyto"="#3498DB", "BALF FACS"="#27AE60",
-                 "PB FACS"="#9B59B6", "Expr"="#E67E22", "Micro"="#34495E")
-  f6i <- ggplot(fw1_top, aes(Weight, Feature, fill=View)) +
-    geom_col(width=0.6) + scale_fill_manual(values=view_cols) +
-    geom_vline(xintercept=0, linewidth=0.2) +
-    labs(x="Weight", y="", title="i  Factor 1 weights", fill="") +
-    tn(7) + theme(legend.position="bottom", legend.key.size=unit(2.5,"mm"),
-                  axis.text.y=element_text(size=6), legend.text=element_text(size=5.5))
-} else {
-  f6i <- ggplot() + geom_blank() + labs(title="i") + tn()
-}
-
-ggsave(file.path(fig_dir,"Fig6_Integration.pdf"),
-       arrangeGrob(f6a,f6b,f6c,f6d,f6e,f6f,f6g,f6h,f6i,
-                   layout_matrix=rbind(c(1,1,1,2,2,2),c(3,3,4,4,5,5),c(6,6,7,7,8,9))),
-       width=220,height=240,units="mm",dpi=300)
-cat("  done\n")
-
-# Figure 7 content integrated into Figures 1-6
-
-cat("\n=== All 6 figures complete ===\n")

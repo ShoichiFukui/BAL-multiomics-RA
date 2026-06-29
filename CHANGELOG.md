@@ -4,7 +4,7 @@
 Public release of the analysis code accompanying the manuscript
 "Bronchoalveolar lavage multi-omics identifies immune signatures predicting
 infection and lung disease progression in rheumatoid arthritis"
-(Hosogaya, Fukui et al.).
+(Fukui, Hosogaya et al.).
 
 - Reproducible R/Python pipeline: scRNA-reference BayesPrism deconvolution,
   differential expression, GSEA/GSVA, prospective infection prediction,

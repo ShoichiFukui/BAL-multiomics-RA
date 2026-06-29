@@ -1,7 +1,7 @@
 # Multi-omics characterization of bronchoalveolar lavage fluid in rheumatoid arthritis
 
 Analysis code accompanying the manuscript by **Fukui, Hosogaya et al.**
-(*Nature Communications*, under review).
+(a manuscript currently under review).
 
 ## Study summary
 
@@ -36,11 +36,9 @@ github_release/
 │   ├── 01_BayesPrism_Deconvolution.R
 │   ├── 02_PostDeconvolution.R
 │   ├── 03_Analysis.R
-│   ├── 04_MOFA2_FullCohort.R
 │   ├── 05_MOFA2_RA_only.R
 │   ├── 06_Comprehensive_Figures.R
 │   ├── analysis_modules/         # sourced by 03_Analysis.R
-│   ├── figure_updates/           # final-version panel updates
 │   └── CT_GMM/                   # CT GMM tissue classification
 │       ├── lung_gmm_batch_v3_FINAL.py    # production GMM pipeline
 │       └── lung_gmm_interactive.ipynb    # interactive Slicer notebook (prototype)
@@ -60,13 +58,12 @@ the schedules below.
 |---|---|---|---|
 | BAL RNA-seq (FASTQ + counts) | GEO | GSE329884 | Approved; **public release 2027-05-02** |
 | 16S rRNA microbiome (FASTQ) | NCBI BioProject / SRA | PRJNA1462027 | Submitted; release per repository policy |
-| Healthy serum cytokine reference (n = 101, Saza cohort) | Reported in Ref. 21 (Saza cohort) | See manuscript Methods § Cytokine profiling | Restricted; available on request |
+| Healthy serum cytokine reference (n = 101, Saza cohort) | Saza cohort (ref. 21; Fukui et al., Drug Discov Ther 2026) | See manuscript Methods § Cytokine profiling | Published aggregate statistics; raw values restricted |
 | Public scRNA-seq BAL reference atlas | GEO | GSE145926, GSE193782, GSE184735 | Public |
 
-The code runs on the **processed, de-identified n = 35 dataset** (the three
-QC-excluded samples are already removed); the raw 37-sample data is not
-distributed. Only the minimal processed data needed to reproduce the reported
-results is made available, in two tiers:
+The code runs on the **processed, de-identified n = 35 dataset** (24 rheumatoid
+arthritis, 11 sarcoidosis). Only the minimal processed data needed to reproduce
+the reported results is made available, in two tiers:
 
 - **Open:** sequence data (GEO GSE329884; SRA PRJNA1462027) and this code.
 - **Controlled access on request:** individual-level clinical metadata, BAL/serum
@@ -76,7 +73,7 @@ results is made available, in two tiers:
   19021801 and 2005819).
 
 This managed-access arrangement for sensitive patient data is consistent with
-*Nature Communications* policy: the data-availability statement specifies the
+the journal policy: the data-availability statement specifies the
 access conditions, and the underlying data are provided to the editors and
 referees during peer review on request. A per-figure **Source Data** file
 accompanies the manuscript.
@@ -88,7 +85,7 @@ and access URLs.
 
 ### R (≥ 4.3)
 
-Major packages: `DESeq2`, `Seurat (≥ 4)`, `Harmony`, `BayesPrism`, `fgsea`,
+Major packages: `DESeq2`, `Seurat (v5)`, `Harmony`, `BayesPrism`, `fgsea`,
 `GSVA`, `MOFA2`, `pROC`, `randomForest`, `tidyverse`, `vegan`, `patchwork`,
 `openxlsx`. See [`R_packages.txt`](R_packages.txt) for the full list.
 
@@ -116,35 +113,31 @@ Rscript scripts/02_PostDeconvolution.R
 # 3. Run primary analyses (DEG, GSEA, GSVA, infection, CT progression)
 Rscript scripts/03_Analysis.R
 
-# 4. MOFA2 integration
-Rscript scripts/04_MOFA2_FullCohort.R
+# 4. RA-specific MOFA2 (the full-cohort 6-view MOFA2 is built within step 3)
 Rscript scripts/05_MOFA2_RA_only.R
 
 # 5. Generate all primary figure panels
 Rscript scripts/06_Comprehensive_Figures.R
 
-# 6. Apply final-version panel updates
-for f in scripts/figure_updates/*.R; do Rscript "$f"; done
 
-# 7. CT tissue classification (requires DICOM scans + lungmask AI model)
+# 6. CT tissue classification (requires DICOM scans + lungmask AI model)
 python scripts/CT_GMM/lung_gmm_batch_v3_FINAL.py
 ```
 
 ## Cohort definitions
 
 - **RA** (n = 24): meets 2010 ACR/EULAR criteria.
-- **Sarcoidosis controls** (n = 11, KYC prefix): granulomatous lung disease comparator.
-- **Excluded samples**: three samples failed QC (one diagnostic reclassification; two with incomplete multi-omics data) and are absent from the released n = 35 dataset.
+- **Sarcoidosis controls** (n = 11): granulomatous lung disease comparator.
 - **Healthy serum reference** (n = 101): Saza cohort; 42 men, 59 women; mean age 58 (SD 9.7).
 
 ## Statistical conventions
 
 - Wilcoxon and Spearman tests use `exact = TRUE`.
 - `set.seed(42)` immediately before any stochastic step.
-- Multiple testing correction: **Benjamini–Hochberg** within each
-  high-dimensional omics analysis (DEG, GSEA, GSVA, microbiome differential
-  abundance). **Bonferroni** correction is applied to the targeted 41-cytokine
-  multi-comparison screening for CT progression.
+- Multiple testing correction: **Benjamini–Hochberg (FDR)** within each analysis
+  family (DEG, GSEA, GSVA, microbiome, the effect-size and biomarker screens, and
+  the cytokine/CT-progression screen); all `p.adjust()` calls use `method = "BH"`.
+  The correction family is stated in each Supplementary Table/Data legend.
 
 ## License
 
