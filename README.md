@@ -1,4 +1,4 @@
-# Multi-omics characterization of bronchoalveolar lavage fluid in rheumatoid arthritis
+# Bronchoalveolar lavage multi-omics identifies immune signatures associated with infection and lung disease progression in rheumatoid arthritis
 
 Analysis code accompanying the manuscript by **Fukui, Hosogaya et al.**
 (a manuscript currently under review).
@@ -17,7 +17,7 @@ arthritis (RA) patients and 11 sarcoidosis controls** (n = 35 total) to:
    disease progression.
 
 Key findings: a compartmentalized Th17-lineage immune axis (local BAL Th17.1
-reduction predicting infection; systemic PB Th17 expansion linked to ILD
+reduction associated with infection; systemic PB Th17 expansion linked to ILD
 progression), in addition to RA-specific B cell / plasma cell activation in the
 lung mucosa.
 
