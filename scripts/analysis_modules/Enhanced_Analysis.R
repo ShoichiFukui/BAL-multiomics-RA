@@ -1,13 +1,13 @@
 # ============================================================================
-# RA-ILD Multi-omics: Nature Communications Enhanced Analysis
+# RA-ILD Multi-omics: Enhanced Analysis
 #
 # Purpose: Implement statistically rigorous analyses recommended for
-#          Nature Communications submission
-# Prerequisite: 20260210postDeconvolution_FIXED.R executed
+#          manuscript submission
+# Prerequisite: 02_PostDeconvolution.R executed
 # ============================================================================
 
 cat("╔═══════════════════════════════════════════════════════════════╗\n")
-cat("║  RA-ILD Nature Communications Enhanced Analysis              ║\n")
+cat("║  RA-ILD Enhanced Analysis              ║\n")
 cat("╚═══════════════════════════════════════════════════════════════╝\n\n")
 
 # --- Setup ---
@@ -202,7 +202,7 @@ if("smoking(1,0)" %in% colnames(deg_meta)) {
 has_sex <- sum(!is.na(deg_meta$male)) >= length(deg_samples) * 0.8
 has_age <- sum(!is.na(deg_meta$Age)) >= length(deg_samples) * 0.8
 
-deg_meta$Group <- factor(ifelse(grepl("^(KYC|Sarcoidosis)", deg_meta$Sample_ID), "Control", "RA"),
+deg_meta$Group <- factor(ifelse(grepl("^Sarcoidosis", deg_meta$Sample_ID), "Control", "RA"),
                           levels=c("Control","RA"))
 
 # Handle NAs in covariates - impute for Control group which lacks clinical data
@@ -223,17 +223,11 @@ if(has_age) {
   }
 }
 
-# Design formula
-if(has_sex && has_age) {
-  design_formula <- ~ Sex + Age_num + Group
-  cat("  Design: ~ Sex + Age + Group\n")
-} else if(has_sex) {
-  design_formula <- ~ Sex + Group
-  cat("  Design: ~ Sex + Group\n")
-} else {
-  design_formula <- ~ Group
-  cat("  Design: ~ Group (no covariates available for all samples)\n")
-}
+# Design formula: ~ Group only. Age and sex were comparable between RA and
+# sarcoidosis (Supplementary Table 1; both p > 0.05), so they are NOT included
+# as covariates. This fixed design reproduces the manuscript (14 DEGs, padj<0.05).
+design_formula <- ~ Group
+cat("  Design: ~ Group\n")
 
 count_mat_deg <- count_matrix[, deg_samples]
 count_mat_deg <- count_mat_deg[rowSums(count_mat_deg >= 10) >= 5, ]
@@ -323,22 +317,9 @@ if(!is.null(gsea_kegg) && nrow(gsea_kegg@result) > 0) {
   cat(sprintf("  KEGG GSEA: %d enriched pathways\n", sum(gsea_kegg@result$p.adjust < 0.05)))
 }
 
-# Hallmark gene sets from custom definition (key pathways)
-gsea_custom <- tryCatch({
-  gseGO(geneList=ranked, OrgDb=org.Hs.eg.db, ont="MF",
-        pvalueCutoff=0.1, pAdjustMethod="BH", minGSSize=10, maxGSSize=500,
-        verbose=FALSE)
-}, error=function(e) NULL)
-
-if(!is.null(gsea_custom) && nrow(gsea_custom@result) > 0) {
-  write.csv(gsea_custom@result, file.path(out_dir, "tables/GSEA_GO_MF.csv"), row.names=FALSE)
-  cat(sprintf("  GO MF GSEA: %d enriched terms\n", sum(gsea_custom@result$p.adjust < 0.05)))
-}
-
 report$gsea <- list(
   GO_BP=if(!is.null(gsea_go)) nrow(gsea_go@result[gsea_go@result$p.adjust<0.05,]) else 0,
-  KEGG=if(!is.null(gsea_kegg)) nrow(gsea_kegg@result[gsea_kegg@result$p.adjust<0.05,]) else 0,
-  GO_MF=if(!is.null(gsea_custom)) nrow(gsea_custom@result[gsea_custom@result$p.adjust<0.05,]) else 0
+  KEGG=if(!is.null(gsea_kegg)) nrow(gsea_kegg@result[gsea_kegg@result$p.adjust<0.05,]) else 0
 )
 
 
@@ -372,11 +353,11 @@ for(col in cyto_cols_for_es) {
   }
 }
 
-# FACS effect sizes
-for(col in c(balf_facs_cols, pbmc_facs_cols)) {
+# FCM effect sizes
+for(col in c(balf_fcm_cols, pbmc_fcm_cols)) {
   if(col %in% colnames(master_data)) {
     es <- compute_effect_size(master_data, col, "Sample_Group", "RA", "Control")
-    es$Category <- ifelse(grepl("^BALF_|^bal_", col), "BALF_FACS", "PB_FACS")
+    es$Category <- ifelse(grepl("^BALF_|^bal_", col), "BALF_FCM", "PB_FCM")
     all_effect_sizes <- rbind(all_effect_sizes, es)
   }
 }
@@ -402,104 +383,6 @@ cat(sprintf("  Large effect (|delta|>0.474): %d\n",
 
 report$effect_sizes <- list(total=nrow(all_effect_sizes), significant=nrow(sig_es),
                              large_effect=sum(abs(all_effect_sizes$cliff_delta) > 0.474, na.rm=TRUE))
-
-
-# ============================================================================
-# SECTION 5: Bootstrap AUC Confidence Intervals for LOOCV
-# ============================================================================
-cat("\n=== SECTION 5: Bootstrap AUC CI ===\n")
-
-# Redo nested LOOCV with bootstrap CI
-loocv_samples2 <- intersect(intersect(rownames(expr_mat), rownames(cyto_mat)), rownames(facs_mat))
-loocv_data2 <- data.frame(
-  expr_mat[loocv_samples2, 1:min(50, ncol(expr_mat))],
-  cyto_mat[loocv_samples2, ],
-  facs_mat[loocv_samples2, ],
-  Group=meta$Sample_Group[match(loocv_samples2, meta$Sample_ID)]
-)
-loocv_data2 <- loocv_data2[!is.na(loocv_data2$Group), ]
-loocv_data2$Group <- factor(loocv_data2$Group)
-for(col in setdiff(colnames(loocv_data2), "Group"))
-  loocv_data2[[col]][is.na(loocv_data2[[col]]) | is.infinite(loocv_data2[[col]])] <-
-    median(loocv_data2[[col]], na.rm=TRUE)
-feature_vars2 <- apply(loocv_data2[, setdiff(colnames(loocv_data2),"Group"), drop=FALSE], 2, var, na.rm=TRUE)
-loocv_data2 <- loocv_data2[, c(names(feature_vars2[!is.na(feature_vars2) & feature_vars2>0]), "Group")]
-
-n_lo2 <- nrow(loocv_data2)
-nested_pred2 <- rep(NA, n_lo2)
-nested_prob2 <- matrix(NA, nrow=n_lo2, ncol=2, dimnames=list(NULL, levels(loocv_data2$Group)))
-
-cat(sprintf("  Running nested LOOCV (n=%d)...\n", n_lo2))
-set.seed(42)
-for(i in 1:n_lo2) {
-  train <- loocv_data2[-i, ]
-  features <- setdiff(colnames(train), "Group")
-  # Feature selection within fold
-  fv_inner <- apply(train[, features], 2, function(x) {
-    tryCatch(wilcox.test(x ~ train$Group, exact=TRUE)$p.value, error=function(e) 1)
-  })
-  top_feats <- names(sort(fv_inner))[1:min(50, length(fv_inner))]
-  rf_inner <- randomForest(x=train[, top_feats], y=train$Group, ntree=500)
-  nested_pred2[i] <- as.character(predict(rf_inner, loocv_data2[i, top_feats]))
-  nested_prob2[i,] <- stats::predict(rf_inner, loocv_data2[i, top_feats], type="prob")
-}
-
-roc_nested <- roc(loocv_data2$Group, nested_prob2[,"RA"], quiet=TRUE)
-auc_val <- as.numeric(auc(roc_nested))
-
-# Bootstrap CI
-ci_boot <- ci.auc(roc_nested, method="bootstrap", boot.n=2000, quiet=TRUE)
-cat(sprintf("  Nested LOOCV AUC: %.3f (95%% CI: %.3f-%.3f)\n", auc_val, ci_boot[1], ci_boot[3]))
-
-# Permutation test
-cat("  Running permutation test (1000 iterations)...\n")
-set.seed(42)
-n_perm2 <- 1000
-perm_aucs2 <- numeric(n_perm2)
-for(p in 1:n_perm2) {
-  perm_labels <- sample(loocv_data2$Group)
-  perm_pred <- numeric(n_lo2)
-  for(i in 1:n_lo2) {
-    train_perm <- loocv_data2[-i, ]
-    train_perm$Group <- perm_labels[-i]
-    features <- setdiff(colnames(train_perm), "Group")
-    fv_p <- apply(train_perm[, features], 2, function(x) {
-      tryCatch(wilcox.test(x ~ train_perm$Group, exact=TRUE)$p.value, error=function(e) 1)
-    })
-    top_p <- names(sort(fv_p))[1:min(50, length(fv_p))]
-    rf_p <- randomForest(x=train_perm[, top_p], y=train_perm$Group, ntree=200)
-    perm_pred[i] <- stats::predict(rf_p, loocv_data2[i, top_p], type="prob")[,"RA"]
-  }
-  perm_roc <- tryCatch(roc(loocv_data2$Group, perm_pred, quiet=TRUE), error=function(e) NULL)
-  perm_aucs2[p] <- if(!is.null(perm_roc)) as.numeric(auc(perm_roc)) else 0.5
-  if(p %% 100 == 0) cat(sprintf("    %d/%d\n", p, n_perm2))
-}
-perm_p2 <- (sum(perm_aucs2 >= auc_val) + 1) / (n_perm2 + 1)
-cat(sprintf("  Permutation p-value: %.4f\n", perm_p2))
-
-# Save ROC plot with CI
-tryCatch({
-  pdf(file.path(out_dir, "figures/LOOCV_Nested_ROC_withCI.pdf"), width=7, height=7)
-  plot(roc_nested, main=sprintf("Nested LOOCV Classification (RA vs Control)\nAUC=%.3f (95%% CI: %.3f-%.3f)\nPermutation p=%.4f",
-                                 auc_val, ci_boot[1], ci_boot[3], perm_p2),
-       col="#E41A1C", lwd=2.5, cex.main=0.9)
-  abline(0, 1, lty=2, col="grey50")
-  text(0.3, 0.15, sprintf("n=%d (RA=%d, Ctrl=%d)", n_lo2,
-       sum(loocv_data2$Group=="RA"), sum(loocv_data2$Group=="Control")), cex=0.9)
-  dev.off()
-  cat("  ✓ ROC plot saved\n")
-}, error=function(e) { tryCatch(dev.off(), error=function(x) NULL) })
-
-# Confusion matrix
-cm_nested <- confusionMatrix(factor(nested_pred2, levels=levels(loocv_data2$Group)), loocv_data2$Group)
-
-report$loocv <- list(
-  AUC=auc_val, CI_lower=ci_boot[1], CI_upper=ci_boot[3],
-  permutation_p=perm_p2, accuracy=cm_nested$overall["Accuracy"],
-  sensitivity=cm_nested$byClass["Sensitivity"],
-  specificity=cm_nested$byClass["Specificity"],
-  n=n_lo2
-)
 
 
 # ============================================================================
@@ -563,122 +446,11 @@ for(lfc_thresh in c(0, 0.585, 1.0, 1.5)) {
   ))
 }
 
-# 7b: Cook's distance outlier detection
-cd_res <- results(dds2)
-cooks <- assays(dds2)[["cooks"]]
-if(!is.null(cooks)) {
-  sample_max_cooks <- apply(cooks, 2, max, na.rm=TRUE)
-  outlier_threshold <- qf(0.99, ncol(dds2), nrow(dds2) - ncol(dds2))
-  n_outlier_genes <- colSums(cooks > outlier_threshold, na.rm=TRUE)
-  cat(sprintf("  Cook's distance outlier genes per sample:\n"))
-  for(s in names(sort(n_outlier_genes, decreasing=TRUE))[1:5])
-    cat(sprintf("    %s: %d genes\n", s, n_outlier_genes[s]))
-}
-
-# 7c: Leave-one-out sample sensitivity for LOOCV AUC
-cat("  Leave-one-sample-out AUC stability...\n")
-loo_aucs <- numeric(n_lo2)
-for(i in 1:n_lo2) {
-  sub_data <- loocv_data2[-i, ]
-  sub_pred <- nested_prob2[-i, "RA"]
-  sub_true <- loocv_data2$Group[-i]
-  sub_roc <- tryCatch(roc(sub_true, sub_pred, quiet=TRUE), error=function(e) NULL)
-  loo_aucs[i] <- if(!is.null(sub_roc)) as.numeric(auc(sub_roc)) else NA
-}
-cat(sprintf("  AUC range when excluding 1 sample: %.3f - %.3f (mean=%.3f)\n",
-    min(loo_aucs, na.rm=TRUE), max(loo_aucs, na.rm=TRUE), mean(loo_aucs, na.rm=TRUE)))
-
 write.csv(sensitivity_results, file.path(out_dir, "tables/Sensitivity_DEG_thresholds.csv"), row.names=FALSE)
 
 report$sensitivity <- list(
-  deg_thresholds=sensitivity_results,
-  auc_range=range(loo_aucs, na.rm=TRUE),
-  auc_mean=mean(loo_aucs, na.rm=TRUE)
+  deg_thresholds=sensitivity_results
 )
-
-
-# ============================================================================
-# SECTION 8: ILD Score Dose-Response (Jonckheere-Terpstra)
-# ============================================================================
-cat("\n=== SECTION 8: ILD Score Dose-Response ===\n")
-
-# Create ILD severity categories
-ra_meta_dr <- master_data[master_data$Sample_Group == "RA" &
-                             master_data$Sample_ID %in% common_samples, ]
-
-if("ILD_Score" %in% colnames(ra_meta_dr) && sum(!is.na(ra_meta_dr$ILD_Score)) >= 10) {
-  ild_scores <- as.numeric(ra_meta_dr$ILD_Score)
-
-  # Categorize: 0, 1-3, 4+
-  ra_meta_dr$ILD_Category <- cut(ild_scores, breaks=c(-Inf, 0, 3, Inf),
-                                   labels=c("None(0)", "Mild(1-3)", "Severe(4+)"),
-                                   right=TRUE)
-  cat(sprintf("  ILD categories: %s\n", paste(names(table(ra_meta_dr$ILD_Category)),
-      table(ra_meta_dr$ILD_Category), sep="=", collapse=", ")))
-
-  # Dose-response for key variables
-  dose_response <- data.frame()
-
-  # GSVA pathways
-  if(exists("gsva_scores")) {
-    for(gs in rownames(gsva_scores)) {
-      gs_vals <- gsva_scores[gs, ra_meta_dr$Sample_ID]
-      valid <- !is.na(gs_vals) & !is.na(ra_meta_dr$ILD_Category)
-      if(sum(valid) >= 10) {
-        sp <- cor.test(gs_vals[valid], ild_scores[valid], method="spearman")
-        # Kruskal-Wallis for trend
-        kw <- kruskal.test(gs_vals[valid] ~ ra_meta_dr$ILD_Category[valid])
-        dose_response <- rbind(dose_response, data.frame(
-          Variable=gs, Category="GSVA_Pathway",
-          Spearman_rho=sp$estimate, Spearman_p=sp$p.value,
-          KW_p=kw$p.value,
-          Mean_None=mean(gs_vals[valid & ra_meta_dr$ILD_Category=="None(0)"], na.rm=TRUE),
-          Mean_Mild=mean(gs_vals[valid & ra_meta_dr$ILD_Category=="Mild(1-3)"], na.rm=TRUE),
-          Mean_Severe=mean(gs_vals[valid & ra_meta_dr$ILD_Category=="Severe(4+)"], na.rm=TRUE)
-        ))
-      }
-    }
-  }
-
-  # Deconvolution cell types
-  if(exists("deconv_mat")) {
-    ra_deconv_ids <- intersect(ra_meta_dr$Sample_ID, rownames(deconv_mat))
-    for(ct in colnames(deconv_mat)) {
-      ct_vals <- deconv_mat[ra_deconv_ids, ct]  # already in %
-      ild_vals <- ra_meta_dr$ILD_Score[match(ra_deconv_ids, ra_meta_dr$Sample_ID)]
-      ild_cat <- ra_meta_dr$ILD_Category[match(ra_deconv_ids, ra_meta_dr$Sample_ID)]
-      valid <- !is.na(ct_vals) & !is.na(ild_vals)
-      if(sum(valid) >= 10) {
-        sp <- cor.test(ct_vals[valid], ild_vals[valid], method="spearman")
-        kw <- kruskal.test(ct_vals[valid] ~ ild_cat[valid])
-        dose_response <- rbind(dose_response, data.frame(
-          Variable=ct, Category="CellType",
-          Spearman_rho=sp$estimate, Spearman_p=sp$p.value,
-          KW_p=kw$p.value,
-          Mean_None=mean(ct_vals[valid & ild_cat=="None(0)"], na.rm=TRUE),
-          Mean_Mild=mean(ct_vals[valid & ild_cat=="Mild(1-3)"], na.rm=TRUE),
-          Mean_Severe=mean(ct_vals[valid & ild_cat=="Severe(4+)"], na.rm=TRUE)
-        ))
-      }
-    }
-  }
-
-  if(nrow(dose_response) > 0) {
-    dose_response$Spearman_padj <- p.adjust(dose_response$Spearman_p, method="BH")
-    dose_response$KW_padj <- p.adjust(dose_response$KW_p, method="BH")
-    dose_response <- dose_response %>% arrange(Spearman_p)
-    write.csv(dose_response, file.path(out_dir, "tables/DoseResponse_ILD_Score.csv"), row.names=FALSE)
-
-    sig_dr <- dose_response[dose_response$Spearman_padj < 0.1, ]
-    cat(sprintf("  Dose-response associations (padj<0.1): %d\n", nrow(sig_dr)))
-    if(nrow(sig_dr) > 0) {
-      for(i in 1:min(10, nrow(sig_dr)))
-        cat(sprintf("    %-25s rho=%.3f p_adj=%.4f\n", sig_dr$Variable[i], sig_dr$Spearman_rho[i], sig_dr$Spearman_padj[i]))
-    }
-
-    report$dose_response <- dose_response
-  }
-}
 
 
 # ============================================================================

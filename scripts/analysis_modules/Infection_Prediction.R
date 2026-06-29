@@ -75,11 +75,11 @@ for(col in cyto_cols) {
   if(!is.null(res)) inf_comparison <- rbind(inf_comparison, res)
 }
 
-# 1b. FACS
-facs_cols_inf <- grep("^BALF_.*Treg|^BALF_.*Th|^BALF_.*Macro|^BALF_.*Neutro|^BALF_.*Activated|^PB_|CD[0-9]|Ratio|Percent",
+# 1b. FCM
+fcm_cols_inf <- grep("^BALF_.*Treg|^BALF_.*Th|^BALF_.*Macro|^BALF_.*Neutro|^BALF_.*Activated|^PB_|CD[0-9]|Ratio|Percent",
                        colnames(ra_inf_c), value=TRUE)
-facs_cols_inf <- facs_cols_inf[!grepl("^CT_|^BALF_EGF|^BALF_Eotaxin", facs_cols_inf)]
-for(col in facs_cols_inf) {
+fcm_cols_inf <- fcm_cols_inf[!grepl("^CT_|^BALF_EGF|^BALF_Eotaxin", fcm_cols_inf)]
+for(col in fcm_cols_inf) {
   vals <- as.numeric(ra_inf_c[[col]])
   pos <- vals[ra_inf_c$Infection=="Inf_pos"]; neg <- vals[ra_inf_c$Infection=="Inf_neg"]
   pos <- pos[!is.na(pos)]; neg <- neg[!is.na(neg)]
@@ -292,13 +292,13 @@ cyto_feat <- log2(cyto_feat + 1)
 rownames(cyto_feat) <- ra_common
 feature_blocks$Cytokines <- cyto_feat
 
-# FACS — taken directly from master_data (BALF/PB prefix retained)
-facs_cols_feat <- grep("^BALF_.*Treg|^BALF_.*Th|^BALF_.*Macro|^BALF_.*Activated|^BALF_.*Neutro.*CD|^PB_", colnames(ra_inf_c), value=TRUE)
-facs_feat <- ra_inf_c[match(ra_common, ra_inf_c$Sample_ID), facs_cols_feat]
-for(col in colnames(facs_feat)) facs_feat[[col]] <- as.numeric(facs_feat[[col]])
-facs_feat <- log2(facs_feat + 0.01)
-rownames(facs_feat) <- ra_common
-feature_blocks$FACS <- facs_feat
+# FCM — taken directly from master_data (BALF/PB prefix retained)
+fcm_cols_feat <- grep("^BALF_.*Treg|^BALF_.*Th|^BALF_.*Macro|^BALF_.*Activated|^BALF_.*Neutro.*CD|^PB_", colnames(ra_inf_c), value=TRUE)
+fcm_feat <- ra_inf_c[match(ra_common, ra_inf_c$Sample_ID), fcm_cols_feat]
+for(col in colnames(fcm_feat)) fcm_feat[[col]] <- as.numeric(fcm_feat[[col]])
+fcm_feat <- log2(fcm_feat + 0.01)
+rownames(fcm_feat) <- ra_common
+feature_blocks$FCM <- fcm_feat
 
 # Deconvolution
 if(exists("deconv_mat")) {
@@ -375,30 +375,6 @@ cat(sprintf("    Accuracy: %.3f\n", accuracy_inf))
 cat(sprintf("    Sensitivity: %.3f\n", sens_inf))
 cat(sprintf("    Specificity: %.3f\n", spec_inf))
 print(cm_inf)
-
-# Feature importance (full model)
-pvals_full <- apply(X_inf, 2, function(x) {
-  tryCatch(wilcox.test(x ~ y_inf, exact=TRUE)$p.value, error=function(e) 1)
-})
-top_full <- names(sort(pvals_full))[1:min(30, length(pvals_full))]
-rf_full <- randomForest(x=X_inf[, top_full], y=y_inf, ntree=1000,
-                         classwt=c("Inf_neg"=1, "Inf_pos"=sum(y_inf=="Inf_neg")/sum(y_inf=="Inf_pos")),
-                         importance=TRUE)
-imp_inf <- data.frame(Feature=rownames(importance(rf_full)),
-                       MeanDecreaseAccuracy=importance(rf_full)[,"MeanDecreaseAccuracy"],
-                       MeanDecreaseGini=importance(rf_full)[,"MeanDecreaseGini"]) %>%
-  arrange(desc(MeanDecreaseGini))
-imp_inf$Type <- case_when(
-  grepl("^Deconv_", imp_inf$Feature) ~ "Deconvolution",
-  grepl("^GSVA_", imp_inf$Feature) ~ "GSVA",
-  grepl("^BALF_|^Serum_|^PB_", imp_inf$Feature) ~ "Cytokine/FACS",
-  TRUE ~ "Expression"
-)
-write.csv(imp_inf, file.path(out_dir, "tables/Infection_Multiomics_FeatureImportance.csv"), row.names=FALSE)
-
-cat("\n  Top 15 features:\n")
-for(i in 1:min(15, nrow(imp_inf)))
-  cat(sprintf("    %-40s [%-15s] Gini=%.3f\n", imp_inf$Feature[i], imp_inf$Type[i], imp_inf$MeanDecreaseGini[i]))
 
 # ============================================================================
 # SECTION 6: Permutation test
@@ -519,11 +495,11 @@ cat(sprintf("  GSEA GO: %d terms\n",
 cat(sprintf("  Multi-omics LOOCV AUC: %.3f (CI: %.3f-%.3f, perm p=%.4f)\n",
     auc_inf, ci_inf[1], ci_inf[3], perm_p))
 
-save(inf_comparison, res_inf_df, imp_inf, auc_inf, ci_inf, perm_p,
+save(inf_comparison, res_inf_df, auc_inf, ci_inf, perm_p,
      file=file.path(out_dir, "Infection_Prediction_Results.RData"))
 
 # ============================================================================
-# SECTION 8: Single Biomarker ROC (for Figure 5a)
+# SECTION 9: Single Biomarker ROC (for Figure 5a)
 # ============================================================================
 cat("\n=== SECTION 8: Single Biomarker ROC ===\n")
 

@@ -10,7 +10,7 @@ authors:
   - family-names: Fukui
     given-names: Shoichi
     affiliation: Nagasaki University Hospital
-    orcid: ""
+    orcid: "https://orcid.org/0000-0001-5487-4692"
   - family-names: Hosogaya
     given-names: Naoki
     affiliation: Nagasaki University Hospital
@@ -25,7 +25,7 @@ preferred-citation:
       given-names: Shoichi
     - family-names: Hosogaya
       given-names: Naoki
-  journal: "Nature Communications"
+  journal: ""  # manuscript under review
   year: 2026
   status: "Under review"
 keywords:

@@ -22,7 +22,7 @@ fcm <- read_excel("FCM_integrated_data_transformed.xlsx", sheet="BALF_analysis")
 colnames(fcm)[1] <- "Sample_ID"
 bp_fcm_common <- intersect(rownames(bp_cell), fcm$Sample_ID)
 bp_fcm_common <- bp_fcm_common[!bp_fcm_common %in% EXCL]
-ra_ids <- bp_fcm_common[grepl("^(KY[0-9]|RA[0-9])", bp_fcm_common)]
+ra_ids <- bp_fcm_common[grepl("^RA[0-9]", bp_fcm_common)]
 ct_u <- read.csv("results/tables/master_data_with_CT_all.csv")
 ct_u <- ct_u[!duplicated(ct_u$Sample_ID),]
 
@@ -45,32 +45,19 @@ serum_view <- as.matrix(master_data[match(ra_ids, master_data$Sample_ID), serum_
 rownames(serum_view) <- ra_ids
 serum_view <- serum_view[, colSums(!is.na(serum_view)) >= 18]
 
-balf_facs_cols <- intersect(c("BALF_Th17.1_CCR6pos_CXCR3pos","BALF_Th17_CCR6pos_CXCR3neg",
+balf_fcm_cols <- intersect(c("BALF_Th17.1_CCR6pos_CXCR3pos","BALF_Th17_CCR6pos_CXCR3neg",
   "BALF_Treg_CD127neg_CD25pos","BALF_Th1_CCR6neg_CXCR3pos","BALF_Th2_CCR6neg_CXCR3neg",
   "BALF_Macrophage_Percent","BALF_Lymphocyte_Percent","BALF_Neutrophil_Percent"), colnames(master_data))
-balf_facs <- as.matrix(master_data[match(ra_ids, master_data$Sample_ID), balf_facs_cols])
-rownames(balf_facs) <- ra_ids
+balf_fcm <- as.matrix(master_data[match(ra_ids, master_data$Sample_ID), balf_fcm_cols])
+rownames(balf_fcm) <- ra_ids
 
-pb_facs_cols <- intersect(c("PB_Th17.1_CCR6pos_CXCR3pos","PB_Th17_CCR6pos_CXCR3neg",
+pb_fcm_cols <- intersect(c("PB_Th17.1_CCR6pos_CXCR3pos","PB_Th17_CCR6pos_CXCR3neg",
   "PB_Treg_CD127neg_CD25pos","PB_Th1_CCR6neg_CXCR3pos","PB_Th2_CCR6neg_CXCR3neg"), colnames(master_data))
-pb_facs <- as.matrix(master_data[match(ra_ids, master_data$Sample_ID), pb_facs_cols])
-rownames(pb_facs) <- ra_ids
-
-micro_view <- NULL
-if (exists("microbiome_genus")) {
-  mi <- intersect(ra_ids, rownames(microbiome_genus))
-  if (length(mi) > 15) {
-    micro_sub <- as.matrix(microbiome_genus[mi, ])
-    micro_sub <- micro_sub[, colSums(micro_sub > 0) >= 3]
-    micro_view <- matrix(NA, nrow=length(ra_ids), ncol=ncol(micro_sub),
-                         dimnames=list(ra_ids, colnames(micro_sub)))
-    micro_view[mi, ] <- micro_sub[mi, ]
-  }
-}
+pb_fcm <- as.matrix(master_data[match(ra_ids, master_data$Sample_ID), pb_fcm_cols])
+rownames(pb_fcm) <- ra_ids
 
 data_list <- list(Expression=t(expr_view), BALF_Cytokine=t(balf_view), Serum_Cytokine=t(serum_view),
-                  BALF_FACS=t(balf_facs), PB_FACS=t(pb_facs))
-if (!is.null(micro_view)) data_list$Microbiome <- t(micro_view)
+                  BALF_FCM=t(balf_fcm), PB_FCM=t(pb_fcm))
 
 cat("Views:", paste(names(data_list), sapply(data_list, ncol), sep="=", collapse=", "), "\n")
 cat("Total features:", sum(sapply(data_list, ncol)), "\n")
@@ -120,7 +107,7 @@ for (f in 1:3) {
   wt_p <- wilcox.test(fv[ok_p & prog_st==1], fv[ok_p & prog_st==0], exact=TRUE)
   r_p <- tryCatch(roc(prog_st[ok_p], fv[ok_p], quiet=TRUE, direction="auto"), error=function(e) NULL)
   # CT rho
-  sp <- cor.test(fv, dhl, method="spearman")
+  sp <- cor.test(fv, dhl, method="spearman", exact=TRUE)
 
   assoc <- rbind(assoc, data.frame(
     Factor=f,
@@ -146,6 +133,18 @@ for (f in 1:3) {
   cat(sprintf("\nFactor %d:\n", f))
   for (i in 1:nrow(fw)) cat(sprintf("  %s: %s (%.3f)\n", fw$View[i], fw$Feature[i], fw$Weight[i]))
 }
+
+# Full factor weights -> Supplementary Data 9 (RA-specific MOFA2: 5 views, n = 24)
+ra_w_long <- data.frame()
+for (f in 1:ncol(ra_weights[[1]])) {
+  for (v in names(ra_weights)) {
+    wv <- ra_weights[[v]][, f]
+    ra_w_long <- rbind(ra_w_long, data.frame(
+      View = sub("_FACS$", "_FCM", v), Factor = f, Feature = names(wv), Weight = round(as.numeric(wv), 5)))
+  }
+}
+write.csv(ra_w_long, "results/tables/MOFA2_RAonly_weights.csv", row.names = FALSE)
+cat(sprintf("\u2713 Wrote MOFA2_RAonly_weights.csv (Suppl. Data 9): %d rows\n", nrow(ra_w_long)))
 
 # Save
 save(mofa_trained, ra_factors, ra_r2, ra_weights, assoc,

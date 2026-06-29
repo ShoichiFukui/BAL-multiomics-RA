@@ -1,6 +1,6 @@
 # ============================================================================
 # RA-ILD Multi-omics Integrated Analysis Pipeline
-# Primary Files Only - For Nature Communications Submission
+# Primary Files Only - For manuscript submission
 # ============================================================================
 
 cat("╔════════════════════════════════════════════════════════════╗\n")
@@ -9,13 +9,12 @@ cat("╚════════════════════════
 
 # Environment Setup
 suppressPackageStartupMessages({
-  pkgs <- c("tidyverse", "readxl", "DESeq2", "edgeR", "WGCNA", "clusterProfiler", 
-            "enrichplot", "org.Hs.eg.db", "ReactomePA", "GSVA", "vegan", "mixOmics",
-            "pheatmap", "randomForest", "caret", "pROC", "ConsensusClusterPlus")
+  pkgs <- c("tidyverse", "readxl", "DESeq2", "edgeR", "clusterProfiler", 
+            "enrichplot", "org.Hs.eg.db", "GSVA", "vegan",
+            "pheatmap", "randomForest", "caret", "pROC")
   for(p in pkgs) {
     if(!requireNamespace(p, quietly=TRUE)) {
-      if(p %in% c("DESeq2","edgeR","WGCNA","clusterProfiler","enrichplot","org.Hs.eg.db",
-                  "ReactomePA","GSVA","ConsensusClusterPlus")) {
+      if(p %in% c("DESeq2","edgeR","clusterProfiler","enrichplot","org.Hs.eg.db","GSVA")) {
         BiocManager::install(p, ask=FALSE, update=FALSE)
       } else install.packages(p, repos="https://cloud.r-project.org/")
     }
@@ -45,14 +44,14 @@ safe_pdf <- function(file, expr, ...) {
 cat("\n=== Data Loading ===\n")
 data_dir <- "."
 
-rnaseq_raw <- read.csv(file.path(data_dir, "Hosogaya RNAseq/RawCount_heatmap_table.csv"), 
+rnaseq_raw <- read.csv(file.path(data_dir, "RNAseq/RawCount_heatmap_table.csv"), 
                        row.names=1, check.names=FALSE)
 if("Cluster_ID" %in% colnames(rnaseq_raw)) rnaseq_raw <- rnaseq_raw[, !colnames(rnaseq_raw) %in% "Cluster_ID"]
 
 microbiome_raw <- read.csv(file.path(data_dir, "OTU abundance table-2 (merged abundance table).csv"),
                            check.names=FALSE)
-sample_cols <- grep("^(KY|RA[0-9]|Sarcoidosis)", colnames(microbiome_raw), value=TRUE)
-new_names <- gsub("^(KYC?\\d{3,4}).*", "\\1", sample_cols)
+sample_cols <- grep("^(RA[0-9]|Sarcoidosis)", colnames(microbiome_raw), value=TRUE)
+new_names <- gsub("^((?:RA|Sarcoidosis)\\d+).*", "\\1", sample_cols)
 colnames(microbiome_raw)[match(sample_cols, colnames(microbiome_raw))] <- new_names
 if(any(duplicated(new_names))) {
   microbiome_agg <- microbiome_raw[, c("ID","Name","Taxonomy")]
@@ -64,7 +63,7 @@ if(any(duplicated(new_names))) {
 }
 
 # NOTE: rename the source clinical/microbiome data file to this ASCII filename to match.
-clinical_data <- read_excel(file.path(data_dir, "RA_BALF_microbiome_clinical_20240430.xlsx"), sheet="Analysis")
+clinical_data <- read_excel(file.path(data_dir, "clinical_metadata.xlsx"), sheet="Analysis")
 colnames(clinical_data)[1] <- "Sample_ID"
 colnames(clinical_data) <- gsub(" ", "_", colnames(clinical_data))
 clinical_colnames <- c("Sample_ID","respiratory_infection","Age","Age_over_65","ra_diagnosis",
@@ -86,10 +85,10 @@ if(ncol(clinical_data)>=length(clinical_colnames))
   colnames(clinical_data)[1:length(clinical_colnames)] <- clinical_colnames
 
 ct_data <- read_excel(file.path(data_dir, "RA_CT_transformed.xlsx"), sheet="analysis")
-balf_cytokine <- read_excel(file.path(data_dir, "Hosogaya_multiplex_20250422.xlsx"), sheet="BALF_Analysis")
-serum_cytokine <- read_excel(file.path(data_dir, "Hosogaya_multiplex_20250422.xlsx"), sheet="Serum_Analysis")
-balf_facs <- read_excel(file.path(data_dir, "FCM_integrated_data_transformed.xlsx"), sheet="BALF_analysis")
-pbmc_facs <- read_excel(file.path(data_dir, "FCM_integrated_data_transformed.xlsx"), sheet="Blood_analysis")
+balf_cytokine <- read_excel(file.path(data_dir, "cytokine_multiplex.xlsx"), sheet="BALF_Analysis")
+serum_cytokine <- read_excel(file.path(data_dir, "cytokine_multiplex.xlsx"), sheet="Serum_Analysis")
+balf_fcm <- read_excel(file.path(data_dir, "FCM_integrated_data_transformed.xlsx"), sheet="BALF_analysis")
+pbmc_fcm <- read_excel(file.path(data_dir, "FCM_integrated_data_transformed.xlsx"), sheet="Blood_analysis")
 colnames(balf_cytokine)[1] <- colnames(serum_cytokine)[1] <- "Sample_ID"
 
 
@@ -171,14 +170,14 @@ clinical_data <- clinical_data[!clinical_data$Sample_ID %in% exclude_samples,]
 ct_data <- ct_data[!ct_data$Sample_ID %in% exclude_samples,]
 balf_cytokine <- balf_cytokine[!balf_cytokine$Sample_ID %in% exclude_samples,]
 serum_cytokine <- serum_cytokine[!serum_cytokine$Sample_ID %in% exclude_samples,]
-balf_facs <- balf_facs[!balf_facs$Sample_ID %in% exclude_samples,]
-pbmc_facs <- pbmc_facs[!pbmc_facs$Sample_ID %in% exclude_samples,]
+balf_fcm <- balf_fcm[!balf_fcm$Sample_ID %in% exclude_samples,]
+pbmc_fcm <- pbmc_fcm[!pbmc_fcm$Sample_ID %in% exclude_samples,]
 if(deconv_loaded) {bp_theta <- bp_theta[!rownames(bp_theta) %in% exclude_samples,]
 bp_cell <- bp_cell[!rownames(bp_cell) %in% exclude_samples,]}
 
-all_samples <- unique(c(colnames(rnaseq_raw), grep("^(KY|RA[0-9]|Sarcoidosis)", colnames(microbiome_raw), value=TRUE)))
+all_samples <- unique(c(colnames(rnaseq_raw), grep("^(RA[0-9]|Sarcoidosis)", colnames(microbiome_raw), value=TRUE)))
 master_data <- data.frame(Sample_ID=all_samples, 
-                          Sample_Group=ifelse(grepl("^(KYC|Sarcoidosis)",all_samples),"Control","RA")) %>%
+                          Sample_Group=ifelse(grepl("^Sarcoidosis",all_samples),"Control","RA")) %>%
   left_join(clinical_data, by="Sample_ID") %>% left_join(ct_data, by="Sample_ID")
 
 balf_renamed <- balf_cytokine
@@ -191,7 +190,7 @@ colnames(serum_renamed)[colnames(serum_renamed) %in% serum_cols] <- paste0("Seru
 master_data <- master_data %>%
   left_join(balf_renamed %>% dplyr::select(-any_of(c("Disease","Infection"))), by="Sample_ID") %>%
   left_join(serum_renamed %>% dplyr::select(-any_of(c("Disease","Infection"))), by="Sample_ID") %>%
-  left_join(balf_facs, by="Sample_ID") %>% left_join(pbmc_facs, by="Sample_ID")
+  left_join(balf_fcm, by="Sample_ID") %>% left_join(pbmc_fcm, by="Sample_ID")
 
 if("respiratory_infection" %in% colnames(master_data)) {
   master_data$Infection <- master_data$respiratory_infection
@@ -274,15 +273,15 @@ cyto_data <- master_data[match(common_samples, master_data$Sample_ID), all_cytok
 cyto_mat <- log2(as.matrix(cyto_data)+1); rownames(cyto_mat) <- common_samples
 colnames(cyto_mat) <- gsub("^BALF_|^Serum_", "", colnames(cyto_mat))
 
-balf_facs_cols <- grep("^BALF_.*(Treg|Th|Macro|Neutro)", colnames(master_data), value=TRUE)
-pbmc_facs_cols <- grep("^PB_", colnames(master_data), value=TRUE)
-all_facs_cols <- c(balf_facs_cols, pbmc_facs_cols)
-facs_data <- master_data[match(common_samples, master_data$Sample_ID), all_facs_cols]
-char_cols <- names(facs_data)[sapply(facs_data, is.character)]
-if(length(char_cols)>0) for(col in char_cols) facs_data[[col]] <- as.numeric(facs_data[[col]])
-numeric_cols <- sapply(facs_data, is.numeric)
-if(sum(!numeric_cols)>0) facs_data <- facs_data[, numeric_cols, drop=FALSE]
-facs_mat <- log2(as.matrix(facs_data)+0.01); rownames(facs_mat) <- common_samples
+balf_fcm_cols <- grep("^BALF_.*(Treg|Th|Macro|Neutro)", colnames(master_data), value=TRUE)
+pbmc_fcm_cols <- grep("^PB_", colnames(master_data), value=TRUE)
+all_fcm_cols <- c(balf_fcm_cols, pbmc_fcm_cols)
+fcm_data <- master_data[match(common_samples, master_data$Sample_ID), all_fcm_cols]
+char_cols <- names(fcm_data)[sapply(fcm_data, is.character)]
+if(length(char_cols)>0) for(col in char_cols) fcm_data[[col]] <- as.numeric(fcm_data[[col]])
+numeric_cols <- sapply(fcm_data, is.numeric)
+if(sum(!numeric_cols)>0) fcm_data <- fcm_data[, numeric_cols, drop=FALSE]
+fcm_mat <- log2(as.matrix(fcm_data)+0.01); rownames(fcm_mat) <- common_samples
 
 meta <- sample_metadata[common_samples, c("Sample_ID","Sample_Group","ILD_Group"), drop=FALSE]
 if("ILD_Score" %in% colnames(sample_metadata)) {
@@ -311,133 +310,6 @@ res_df$Regulation[res_df$padj<0.05 & res_df$log2FoldChange < (-1)] <- "Down"
 safe_write(res_df, "results/tables/DEG_RA_vs_Control.csv", row.names=FALSE)
 cat(sprintf("  DEGs: %d up, %d down\n", sum(res_df$Regulation=="Up",na.rm=TRUE),
             sum(res_df$Regulation=="Down",na.rm=TRUE)))
-
-# DIABLO
-cat("\n=== DIABLO ===\n")
-diablo_results <- NULL
-tryCatch({
-  Y <- as.factor(meta$Sample_Group); names(Y) <- rownames(meta)
-  expr_clean <- expr_mat; expr_clean[is.na(expr_clean)|is.infinite(expr_clean)] <- 0
-  cyto_clean <- cyto_mat; cyto_clean[is.na(cyto_clean)|is.infinite(cyto_clean)] <- 0
-  cyto_clean <- cyto_clean[, colSums(!is.na(cyto_clean))>nrow(cyto_clean)/2]
-  facs_clean <- facs_mat; facs_clean[is.na(facs_clean)|is.infinite(facs_clean)] <- 0
-  facs_clean <- facs_clean[, colSums(!is.na(facs_clean))>nrow(facs_clean)/2]
-  data_list <- list(Expression=expr_clean, Cytokines=cyto_clean, FACS=facs_clean)
-  design <- matrix(0.1, ncol=3, nrow=3, dimnames=list(names(data_list),names(data_list)))
-  diag(design) <- 0
-  diablo_res <- block.splsda(X=data_list, Y=Y, ncomp=2, design=design)
-  diablo_results <- list(model=diablo_res, features=selectVar(diablo_res,comp=1), design=design)
-  safe_pdf("results/figures/DIABLO_samples.pdf", 
-           {plotIndiv(diablo_res, comp=c(1,2), group=Y, legend=TRUE, title="DIABLO")}, width=8, height=7)
-  cat("  ✓ Complete\n")
-}, error=function(e) cat("  ✗ Skipped\n"))
-
-# WGCNA
-cat("\n=== WGCNA ===\n")
-wgcna_results <- MEs <- NULL
-tryCatch({
-  wgcna_expr <- t(expr_matrix)
-  gsg <- goodSamplesGenes(wgcna_expr, verbose=3)
-  if(!gsg$allOK) wgcna_expr <- wgcna_expr[gsg$goodSamples, gsg$goodGenes]
-  sft <- pickSoftThreshold(wgcna_expr, powerVector=c(seq(1,10,1),seq(12,20,2)), verbose=0)
-  softPower <- ifelse(is.na(sft$powerEstimate), 6, sft$powerEstimate)
-  net <- blockwiseModules(wgcna_expr, power=softPower, TOMType="unsigned", minModuleSize=30,
-                          reassignThreshold=0, mergeCutHeight=0.25, numericLabels=TRUE, 
-                          pamRespectsDendro=FALSE, verbose=0)
-  moduleColors <- labels2colors(net$colors); MEs <- net$MEs
-  traits <- data.frame(Disease=as.numeric(meta$Sample_Group=="RA"),
-                       Infection=ifelse(is.na(meta$Infection_Group),0,
-                                        as.numeric(meta$Infection_Group=="Infection_Positive")))
-  moduleTraitCor <- cor(MEs, traits, use="p")
-  moduleTraitPvalue <- corPvalueStudent(moduleTraitCor, nrow(wgcna_expr))
-  wgcna_results <- list(net=net, moduleColors=moduleColors, MEs=MEs,
-                        moduleTraitCor=moduleTraitCor, moduleTraitPvalue=moduleTraitPvalue)
-  safe_write(data.frame(Gene=colnames(wgcna_expr), Module=moduleColors),
-             "results/tables/WGCNA_modules.csv", row.names=FALSE)
-  cat(sprintf("  Modules: %d\n", length(unique(moduleColors))-1))
-}, error=function(e) cat("  ✗ Skipped\n"))
-
-# Consensus Clustering
-cat("\n=== Clustering ===\n")
-clustering_results <- NULL
-tryCatch({
-  ra_samples_clust <- common_samples[meta$Sample_Group=="RA"]
-  if(length(ra_samples_clust)>=15) {
-    clust_expr <- t(expr_matrix[,ra_samples_clust])
-    expr_vars <- apply(clust_expr, 2, var, na.rm=TRUE)
-    top_expr <- names(sort(expr_vars, decreasing=TRUE))[1:min(100,sum(!is.na(expr_vars)))]
-    clust_data <- cbind(clust_expr[,top_expr], cyto_mat[ra_samples_clust,], facs_mat[ra_samples_clust,])
-    clust_data[is.na(clust_data)|is.infinite(clust_data)] <- 0
-    feature_vars <- apply(clust_data, 2, var, na.rm=TRUE)
-    clust_data <- t(scale(t(clust_data[,!is.na(feature_vars) & feature_vars>0])))
-    cc_results <- ConsensusClusterPlus(t(clust_data), maxK=4, reps=1000, pItem=0.8, pFeature=0.8,
-                                       clusterAlg="km", distance="euclidean", seed=42, plot="pdf",
-                                       title="results/consensus_clustering/consensus")
-    cluster_assignments <- data.frame(Sample_ID=ra_samples_clust, Cluster_k2=cc_results[[2]]$consensusClass,
-                                      Cluster_k3=cc_results[[3]]$consensusClass, Cluster_k4=cc_results[[4]]$consensusClass)
-    safe_write(cluster_assignments, "results/tables/Consensus_clusters.csv", row.names=FALSE)
-    clustering_results <- list(consensus_results=cc_results, cluster_assignments=cluster_assignments)
-    cat(sprintf("  ✓ %d samples\n", length(ra_samples_clust)))
-  }
-}, error=function(e) cat("  ✗ Skipped\n"))
-
-# LOOCV
-cat("\n=== LOOCV ===\n")
-loocv_results <- NULL
-tryCatch({
-  loocv_samples <- intersect(intersect(rownames(expr_mat),rownames(cyto_mat)),rownames(facs_mat))
-  loocv_data <- data.frame(expr_mat[loocv_samples,1:min(50,ncol(expr_mat))], cyto_mat[loocv_samples,],
-                           facs_mat[loocv_samples,], Group=meta$Sample_Group[match(loocv_samples,meta$Sample_ID)])
-  loocv_data <- loocv_data[!is.na(loocv_data$Group), ]                    # base subset to avoid stats::filter collision
-  loocv_data$Group <- factor(loocv_data$Group)                             # ensure factor levels are not NULL
-  for(col in setdiff(colnames(loocv_data),"Group"))
-    loocv_data[[col]][is.na(loocv_data[[col]])|is.infinite(loocv_data[[col]])] <- median(loocv_data[[col]],na.rm=TRUE)
-  feature_vars <- apply(loocv_data[, setdiff(colnames(loocv_data),"Group"), drop=FALSE], 2, var, na.rm=TRUE)  # base indexing to avoid dplyr::select collision
-  loocv_data <- loocv_data[,c(names(feature_vars[!is.na(feature_vars) & feature_vars>0]),"Group")]
-  if(nrow(loocv_data)>=15 && ncol(loocv_data)>=10) {
-    n <- nrow(loocv_data); predictions <- rep(NA,n)
-    pred_probs <- matrix(NA, nrow=n, ncol=2, dimnames=list(NULL,levels(loocv_data$Group)))
-    for(i in 1:n) {
-      features <- setdiff(colnames(loocv_data),"Group")
-      rf_temp <- randomForest(x=loocv_data[-i,features], y=loocv_data$Group[-i], ntree=500)
-      predictions[i] <- as.character(predict(rf_temp, loocv_data[i,features]))
-      pred_probs[i,] <- stats::predict(rf_temp, loocv_data[i,features], type="prob")
-    }
-    conf_mat <- table(Predicted=predictions, Actual=loocv_data$Group)
-    roc_obj <- roc(loocv_data$Group, pred_probs[,"RA"])
-    loocv_results <- list(predictions=predictions, probabilities=pred_probs, confusion_matrix=conf_mat,
-                          accuracy=sum(diag(conf_mat))/sum(conf_mat), AUC=as.numeric(auc(roc_obj)), roc=roc_obj)
-    safe_pdf("results/figures/LOOCV_ROC.pdf", 
-             {plot(roc_obj, main=sprintf("LOOCV\nAUC=%.3f",loocv_results$AUC), col="#E41A1C", lwd=2)
-               abline(0,1,lty=2,col="gray")}, width=6, height=6)
-    cat(sprintf("  AUC: %.3f\n", loocv_results$AUC))
-  }
-}, error=function(e) cat(sprintf("  ✗ LOOCV error: %s\n", e$message)))
-
-# Pathway Analysis
-cat("\n=== Pathways ===\n")
-deg_genes <- res_df %>% dplyr::filter(Regulation!="NS", !is.na(ENTREZID)) %>% pull(ENTREZID) %>% unique()
-background <- res_df %>% dplyr::filter(!is.na(ENTREZID)) %>% pull(ENTREZID) %>% unique()
-pathway_results <- list()
-if(length(deg_genes)>=10) {
-  tryCatch({
-    ego <- enrichGO(gene=deg_genes, universe=background, OrgDb=org.Hs.eg.db, ont="BP", 
-                    pAdjustMethod="BH", pvalueCutoff=0.05, readable=TRUE)
-    if(!is.null(ego) && nrow(ego@result)>0) {
-      pathway_results$GO_BP <- ego; safe_write(ego@result, "results/tables/GO_BP.csv", row.names=FALSE)}
-  }, error=function(e) NULL)
-  tryCatch({
-    kegg <- enrichKEGG(gene=deg_genes, organism="hsa", universe=background, pvalueCutoff=0.05)
-    if(!is.null(kegg) && nrow(kegg@result)>0) {
-      pathway_results$KEGG <- kegg; safe_write(kegg@result, "results/tables/KEGG.csv", row.names=FALSE)}
-  }, error=function(e) NULL)
-  tryCatch({
-    reactome <- enrichPathway(gene=deg_genes, organism="human", universe=background, pvalueCutoff=0.05, readable=TRUE)
-    if(!is.null(reactome) && nrow(reactome@result)>0) {
-      pathway_results$Reactome <- reactome; safe_write(reactome@result, "results/tables/Reactome.csv", row.names=FALSE)}
-  }, error=function(e) NULL)
-}
-cat("✓ Pathways complete\n")
 
 # GSVA
 cat("\n=== GSVA ===\n")
@@ -557,16 +429,16 @@ tryCatch({
   }
   
   external_cor <- data.frame()
-  if(ncol(facs_mat)>0) {
-    facs_samples <- intersect(ra_samples, rownames(facs_mat))
-    if(length(facs_samples)>=10) {
-      for(gs in rownames(gsva_scores)) for(facs_col in colnames(facs_mat)) {
-        valid_idx <- !is.na(gsva_scores[gs,facs_samples]) & !is.na(facs_mat[facs_samples,facs_col]) & 
-          is.finite(gsva_scores[gs,facs_samples]) & is.finite(facs_mat[facs_samples,facs_col])
+  if(ncol(fcm_mat)>0) {
+    fcm_samples <- intersect(ra_samples, rownames(fcm_mat))
+    if(length(fcm_samples)>=10) {
+      for(gs in rownames(gsva_scores)) for(fcm_col in colnames(fcm_mat)) {
+        valid_idx <- !is.na(gsva_scores[gs,fcm_samples]) & !is.na(fcm_mat[fcm_samples,fcm_col]) & 
+          is.finite(gsva_scores[gs,fcm_samples]) & is.finite(fcm_mat[fcm_samples,fcm_col])
         if(sum(valid_idx)>=10) {
-          sp_test <- cor.test(gsva_scores[gs,facs_samples][valid_idx], facs_mat[facs_samples,facs_col][valid_idx], 
+          sp_test <- cor.test(gsva_scores[gs,fcm_samples][valid_idx], fcm_mat[fcm_samples,fcm_col][valid_idx], 
                               method="spearman")
-          external_cor <- rbind(external_cor, data.frame(GeneSet=gs, External_Marker=facs_col, Type="FCM",
+          external_cor <- rbind(external_cor, data.frame(GeneSet=gs, External_Marker=fcm_col, Type="FCM",
                                                          N=sum(valid_idx), Spearman_rho=sp_test$estimate, 
                                                          P_value=sp_test$p.value, stringsAsFactors=FALSE))
         }
@@ -606,40 +478,9 @@ tryCatch({
   cat(sprintf("  %d gene sets, method=%s\n", length(gene_sets_filtered), gsva_method))
 }, error=function(e) cat("  ✗ Skipped\n"))
 
-# Module Enrichment
-cat("\n=== Module Enrichment ===\n")
-module_enrichment_results <- NULL
-if(!is.null(wgcna_results)) {
-  tryCatch({
-    moduleColors <- wgcna_results$moduleColors
-    unique_modules <- setdiff(unique(moduleColors), "grey")
-    module_enrichment_results <- list()
-    for(module in unique_modules) {
-      module_genes <- names(moduleColors)[moduleColors==module]
-      module_entrez <- gene_annotations %>% dplyr::filter(Gene_Symbol %in% module_genes, !is.na(ENTREZID)) %>% 
-        pull(ENTREZID) %>% unique()
-      if(length(module_entrez)>=10) {
-        ego <- tryCatch(enrichGO(gene=module_entrez, universe=background, OrgDb=org.Hs.eg.db, ont="BP", 
-                                 pAdjustMethod="BH", pvalueCutoff=0.05, readable=TRUE), error=function(e) NULL)
-        if(!is.null(ego) && nrow(ego@result)>0) {
-          module_enrichment_results[[module]]$GO_BP <- ego
-          safe_write(ego@result, sprintf("results/tables/Module_%s_GO_BP.csv",module), row.names=FALSE)
-        }
-        kegg <- tryCatch(enrichKEGG(gene=module_entrez, organism="hsa", universe=background, pvalueCutoff=0.05),
-                         error=function(e) NULL)
-        if(!is.null(kegg) && nrow(kegg@result)>0) {
-          module_enrichment_results[[module]]$KEGG <- kegg
-          safe_write(kegg@result, sprintf("results/tables/Module_%s_KEGG.csv",module), row.names=FALSE)
-        }
-      }
-    }
-    cat(sprintf("  %d modules\n", length(module_enrichment_results)))
-  }, error=function(e) cat("  ✗ Skipped\n"))
-}
-
 # Microbiome
 cat("\n=== Microbiome ===\n")
-microbiome_samples <- grep("^(KY|RA[0-9]|Sarcoidosis)", colnames(microbiome_raw), value=TRUE)
+microbiome_samples <- grep("^(RA[0-9]|Sarcoidosis)", colnames(microbiome_raw), value=TRUE)
 abundance_matrix <- as.matrix(microbiome_raw[, microbiome_samples])
 rownames(abundance_matrix) <- microbiome_raw$Taxonomy
 abundance_matrix[is.na(abundance_matrix)] <- 0
@@ -656,8 +497,8 @@ microbiome_results <- list(abundance=abundance_matrix, alpha_diversity=diversity
                            beta_diversity=bray_dist, permanova=permanova_res)
 cat("✓ Complete\n")
 
-# Cytokine/FACS
-cat("\n=== Cytokine/FACS ===\n")
+# Cytokine/FCM
+cat("\n=== Cytokine/FCM ===\n")
 compare_groups <- function(data, cols, group_col, g1, g2) {
   results <- data.frame(Variable=cols, p_value=NA, log2FC=NA)
   for(i in seq_along(cols)) {
@@ -674,9 +515,9 @@ balf_cyto_stats <- compare_groups(master_data, balf_cytokine_cols, "Sample_Group
 safe_write(balf_cyto_stats, "results/tables/Cytokines_BALF.csv", row.names=FALSE)
 serum_cyto_stats <- compare_groups(master_data, serum_cytokine_cols, "Sample_Group", "Control", "RA")
 safe_write(serum_cyto_stats, "results/tables/Cytokines_Serum.csv", row.names=FALSE)
-balf_facs_stats <- compare_groups(master_data, balf_facs_cols, "Sample_Group", "Control", "RA")
-safe_write(balf_facs_stats, "results/tables/FACS_BALF.csv", row.names=FALSE)
-cytokine_facs_results <- list(BALF_cytokines=balf_cyto_stats, Serum_cytokines=serum_cyto_stats, BALF_FACS=balf_facs_stats)
+balf_fcm_stats <- compare_groups(master_data, balf_fcm_cols, "Sample_Group", "Control", "RA")
+safe_write(balf_fcm_stats, "results/tables/FCM_BALF.csv", row.names=FALSE)
+cytokine_fcm_results <- list(BALF_cytokines=balf_cyto_stats, Serum_cytokines=serum_cyto_stats, BALF_FCM=balf_fcm_stats)
 cat("✓ Complete\n")
 
 # Th17.1 Correlations
@@ -695,7 +536,7 @@ tryCatch({
         for(gene in rownames(log_cpm)[1:min(1000,nrow(log_cpm))]) {
           gene_vals <- log_cpm[gene, common_samples_th17]; th17_matched <- th17_vals[common_samples_th17]
           if(sum(!is.na(gene_vals) & !is.na(th17_matched))>=10) {
-            sp_test <- cor.test(gene_vals, th17_matched, method="spearman")
+            sp_test <- cor.test(gene_vals, th17_matched, method="spearman", exact=TRUE)
             th17_cor_results <- rbind(th17_cor_results, data.frame(Gene=gene, Spearman_rho=sp_test$estimate,
                                                                    P_value=sp_test$p.value, stringsAsFactors=FALSE))
           }
@@ -710,103 +551,6 @@ tryCatch({
     }
   }
   cat("✓ Complete\n")
-}, error=function(e) cat("✗ Skipped\n"))
-
-# Mito-Immune Axis
-cat("\n=== Mito-Immune ===\n")
-mito_immune_results <- NULL
-tryCatch({
-  if(!is.null(gsva_results) && !is.null(gsva_results$scores)) {
-    gsva_scores <- gsva_results$scores
-    mito_avail <- intersect(c("OXPHOS","Mito_Biogenesis","TCA_Cycle"), rownames(gsva_scores))
-    immune_avail <- intersect(c("Innate_Myeloid","IFN_Response","TNFa_NFkB","Adaptive_Tcell","Cytotoxicity"), 
-                              rownames(gsva_scores))
-    if(length(mito_avail)>0 && length(immune_avail)>0) {
-      ra_samples_mito <- colnames(gsva_scores)[colnames(gsva_scores) %in% common_samples[meta$Sample_Group=="RA"]]
-      mito_score <- colMeans(gsva_scores[mito_avail, ra_samples_mito, drop=FALSE])
-      immune_score <- colMeans(gsva_scores[immune_avail, ra_samples_mito, drop=FALSE])
-      cor_test <- cor.test(mito_score, immune_score, method="spearman")
-      mito_immune_df <- data.frame(Sample_ID=ra_samples_mito, Mito_Score=mito_score, Immune_Score=immune_score)
-      safe_write(mito_immune_df, "results/tables/Mito_Immune_scores.csv", row.names=FALSE)
-      safe_pdf("results/figures/Mito_Immune_scatter.pdf", {
-        plot(mito_score, immune_score, xlab="Mitochondrial Score", ylab="Immune Score",
-             main=sprintf("Mito-Immune Axis\nρ=%.3f, p=%.3e", cor_test$estimate, cor_test$p.value),
-             pch=19, col="#E41A1C"); abline(lm(immune_score~mito_score), col="blue", lwd=2, lty=2)
-      }, width=6, height=6)
-      mito_immune_results <- list(mito_pathways=mito_avail, immune_pathways=immune_avail, 
-                                  scores=mito_immune_df, correlation=cor_test)
-      cat(sprintf("  ρ=%.3f, p=%.3e\n", cor_test$estimate, cor_test$p.value))
-    }
-  }
-}, error=function(e) cat("✗ Skipped\n"))
-
-# Machine Learning
-cat("\n=== ML ===\n")
-ml_results <- NULL
-tryCatch({
-  ml_samples <- intersect(rownames(expr_mat), rownames(cyto_mat))
-  ml_data <- data.frame(expr_mat[ml_samples,1:min(50,ncol(expr_mat))], cyto_mat[ml_samples,],
-                        Sample_Group=meta$Sample_Group[match(ml_samples,meta$Sample_ID)]) %>% dplyr::filter(!is.na(Sample_Group))
-  feature_vars <- apply(ml_data %>% dplyr::select(-Sample_Group), 2, var, na.rm=TRUE)
-  ml_data <- ml_data[,c(names(feature_vars[!is.na(feature_vars) & feature_vars>0]),"Sample_Group")]
-  if(nrow(ml_data)>=15 && ncol(ml_data)>=10) {
-    set.seed(42); train_idx <- createDataPartition(ml_data$Sample_Group, p=0.7, list=FALSE)
-    train_data <- ml_data[train_idx,]; test_data <- ml_data[-train_idx,]
-    features <- setdiff(colnames(ml_data),"Sample_Group")
-    for(col in features) {
-      train_data[[col]][is.na(train_data[[col]])] <- median(train_data[[col]], na.rm=TRUE)
-      test_data[[col]][is.na(test_data[[col]])] <- median(train_data[[col]], na.rm=TRUE)
-    }
-    rf_model <- randomForest(x=train_data[,features], y=train_data$Sample_Group, ntree=500, importance=TRUE)
-    test_pred_prob <- stats::predict(rf_model, newdata=test_data[,features], type="prob")
-    test_pred_class <- predict(rf_model, newdata=test_data[,features])
-    roc_obj <- roc(test_data$Sample_Group, test_pred_prob[,"RA"])
-    conf_mat <- confusionMatrix(test_pred_class, test_data$Sample_Group)
-    ml_results <- list(model=rf_model, AUC=as.numeric(auc(roc_obj)), confusion_matrix=conf_mat, roc=roc_obj)
-    cat(sprintf("  AUC=%.3f\n", ml_results$AUC))
-  }
-}, error=function(e) cat("✗ Skipped\n"))
-
-# Infection Prediction
-cat("\n=== Infection Prediction ===\n")
-infection_prediction <- NULL
-tryCatch({
-  if("Infection_Group" %in% colnames(meta)) {
-    ra_inf_samples <- common_samples[meta$Sample_Group=="RA" & !is.na(meta$Infection_Group)]
-    if(length(ra_inf_samples)>=15) {
-      inf_data <- data.frame(cyto_mat[ra_inf_samples,], facs_mat[ra_inf_samples,],
-                             Infection=meta$Infection_Group[match(ra_inf_samples,meta$Sample_ID)]) %>% dplyr::filter(!is.na(Infection))
-      for(col in setdiff(colnames(inf_data),"Infection"))
-        inf_data[[col]][is.na(inf_data[[col]])|is.infinite(inf_data[[col]])] <- median(inf_data[[col]],na.rm=TRUE)
-      feature_vars <- apply(inf_data %>% dplyr::select(-Infection), 2, var, na.rm=TRUE)
-      inf_data <- inf_data[,c(names(feature_vars[!is.na(feature_vars) & feature_vars>0]),"Infection")]
-      if(nrow(inf_data)>=15 && ncol(inf_data)>=5) {
-        features <- setdiff(colnames(inf_data),"Infection")
-        rf_inf <- randomForest(x=inf_data[,features], y=inf_data$Infection, ntree=500, importance=TRUE)
-        importance_df <- data.frame(Feature=rownames(importance(rf_inf)),
-                                    MeanDecreaseGini=importance(rf_inf)[,"MeanDecreaseGini"]) %>%
-          arrange(desc(MeanDecreaseGini))
-        safe_write(importance_df, "results/tables/Infection_prediction_importance.csv", row.names=FALSE)
-        n_inf <- nrow(inf_data); inf_predictions <- rep(NA,n_inf)
-        inf_probs <- matrix(NA, nrow=n_inf, ncol=2, dimnames=list(NULL,levels(inf_data$Infection)))
-        for(i in 1:n_inf) {
-          rf_temp_inf <- randomForest(x=inf_data[-i,features], y=inf_data$Infection[-i], ntree=500)
-          inf_predictions[i] <- as.character(predict(rf_temp_inf, inf_data[i,features]))
-          inf_probs[i,] <- stats::predict(rf_temp_inf, inf_data[i,features], type="prob")
-        }
-        conf_mat_inf <- table(Predicted=inf_predictions, Actual=inf_data$Infection)
-        roc_inf <- roc(inf_data$Infection, inf_probs[,"Infection_Positive"])
-        infection_prediction <- list(model=rf_inf, importance=importance_df, 
-                                     accuracy=sum(diag(conf_mat_inf))/sum(conf_mat_inf),
-                                     AUC=as.numeric(auc(roc_inf)), confusion_matrix=conf_mat_inf, roc=roc_inf)
-        safe_pdf("results/figures/Infection_prediction_ROC.pdf", {
-          plot(roc_inf, main=sprintf("Infection Prediction\nAUC=%.3f",infection_prediction$AUC), 
-               col="#FF7F00", lwd=2); abline(0,1,lty=2,col="gray")
-        }, width=6, height=6)
-        cat(sprintf("  AUC=%.3f\n", infection_prediction$AUC))
-      }
-    }
-  }
 }, error=function(e) cat("✗ Skipped\n"))
 
 # Deconvolution
@@ -826,7 +570,7 @@ if(deconv_loaded) {
     
     # 2-group label (RA vs Control)
     deconv_group <- factor(
-      ifelse(grepl("^(KYC|Sarcoidosis)", deconv_common), "Control", "RA"),
+      ifelse(grepl("^Sarcoidosis", deconv_common), "Control", "RA"),
       levels = c("Control", "RA"))
     
     deconv_export <- data.frame(Sample_ID=deconv_common, Group=as.character(deconv_group),
@@ -903,7 +647,7 @@ if(deconv_loaded) {
       ra_vs_ctrl_comparison=if(nrow(ra_vs_ctrl_comparison)>0) ra_vs_ctrl_comparison else NULL,
       ild_vs_nonild_comparison=if(nrow(ild_vs_nonild_comparison)>0) ild_vs_nonild_comparison else NULL,
       ild_vs_ctrl_comparison=if(nrow(ild_vs_ctrl_comparison)>0) ild_vs_ctrl_comparison else NULL)
-    save(master_data, gene_annotations, count_matrix, log_cpm, expr_matrix, expr_mat, cyto_mat, facs_mat, meta,
+    save(master_data, gene_annotations, count_matrix, log_cpm, expr_matrix, expr_mat, cyto_mat, fcm_mat, meta,
          common_samples, deconv_mat, deconv_cell, deconv_common, deconv_group, deconv_subgroup,
          file="results/RA_ILD_Core_Data.RData")
     cat(sprintf("  Total: %d samples (Ctrl:%d, RA-nonILD:%d, RA-ILD:%d), %d types\n",
@@ -947,89 +691,15 @@ tryCatch({
   }
 }, error=function(e) cat("✗ Skipped\n"))
 
-# Defense Model
-cat("\n=== Defense Model ===\n")
-defense_model <- NULL
-tryCatch({
-  if(!is.null(gsva_results) && "Infection_Group" %in% colnames(meta)) {
-    gsva_scores <- gsva_results$scores; defense_axes <- list()
-    if("OXPHOS" %in% rownames(gsva_scores)) defense_axes$OXPHOS <- gsva_scores["OXPHOS",]
-    if("Surfactant" %in% rownames(gsva_scores)) defense_axes$Surfactant <- gsva_scores["Surfactant",]
-    th17_col <- grep("Th17\\.1|Th17_1", colnames(master_data), value=TRUE, ignore.case=TRUE)
-    if(length(th17_col)>0) {
-      th17_vals <- as.numeric(master_data[[th17_col[1]]][match(colnames(gsva_scores),master_data$Sample_ID)])
-      names(th17_vals) <- colnames(gsva_scores); defense_axes$Th17_1 <- th17_vals
-    }
-    if(length(defense_axes)>=2) {
-      ra_samples_def <- colnames(gsva_scores)[colnames(gsva_scores) %in% common_samples[meta$Sample_Group=="RA"]]
-      defense_mat <- matrix(NA, nrow=length(defense_axes), ncol=length(ra_samples_def))
-      rownames(defense_mat) <- names(defense_axes); colnames(defense_mat) <- ra_samples_def
-      for(axis_name in names(defense_axes)) defense_mat[axis_name,] <- scale(defense_axes[[axis_name]][ra_samples_def])[,1]
-      composite_score <- colMeans(defense_mat, na.rm=TRUE)
-      ra_meta_def <- meta[ra_samples_def,]
-      inf_neg_def <- ra_samples_def[!is.na(ra_meta_def$Infection_Group) & 
-                                      ra_meta_def$Infection_Group=="Infection_Negative"]
-      inf_pos_def <- ra_samples_def[!is.na(ra_meta_def$Infection_Group) & 
-                                      ra_meta_def$Infection_Group=="Infection_Positive"]
-      if(length(inf_neg_def)>=3 && length(inf_pos_def)>=3) {
-        wt_def <- wilcox.test(composite_score[inf_neg_def], composite_score[inf_pos_def], exact=TRUE)
-        defense_infection <- factor(ifelse(ra_samples_def %in% inf_pos_def,"Positive","Negative"),
-                                    levels=c("Negative","Positive"))
-        roc_def <- roc(defense_infection, composite_score)
-        defense_scores_df <- data.frame(Sample_ID=ra_samples_def, t(defense_mat), Composite_Score=composite_score)
-        safe_write(defense_scores_df, "results/tables/Defense_model_scores.csv", row.names=FALSE)
-        defense_model <- list(axes=names(defense_axes), defense_matrix=defense_mat, composite_score=composite_score,
-                              p_value=wt_def$p.value, AUC=as.numeric(auc(roc_def)))
-        cat(sprintf("  %d axes, AUC=%.3f\n", length(defense_axes), defense_model$AUC))
-      }
-    }
-  }
-}, error=function(e) cat("✗ Skipped\n"))
-
-# Network
-cat("\n=== Network ===\n")
-network_results <- NULL
-tryCatch({
-  ra_samples_net <- common_samples[meta$Sample_Group=="RA"]
-  gene_vars_net <- apply(log_cpm[,ra_samples_net], 1, var, na.rm=TRUE)
-  top_genes_net <- names(sort(gene_vars_net, decreasing=TRUE))[1:50]
-  cyto_vars <- apply(cyto_mat[ra_samples_net,], 2, var, na.rm=TRUE)
-  top_cyto <- names(sort(cyto_vars, decreasing=TRUE))[1:20]
-  facs_vars <- apply(facs_mat[ra_samples_net,], 2, var, na.rm=TRUE)
-  top_facs <- names(sort(facs_vars, decreasing=TRUE))[1:20]
-  network_data <- cbind(t(log_cpm[top_genes_net,ra_samples_net]), cyto_mat[ra_samples_net,top_cyto],
-                        facs_mat[ra_samples_net,top_facs])
-  network_cor <- cor(network_data, method="spearman", use="pairwise.complete.obs")
-  edges <- data.frame()
-  for(i in 1:(nrow(network_cor)-1)) for(j in (i+1):ncol(network_cor)) {
-    if(abs(network_cor[i,j])>0.5 && !is.na(network_cor[i,j])) {
-      node1 <- rownames(network_cor)[i]; node2 <- colnames(network_cor)[j]
-      type1 <- ifelse(node1 %in% top_genes_net,"Gene",ifelse(node1 %in% top_cyto,"Cytokine","FCM"))
-      type2 <- ifelse(node2 %in% top_genes_net,"Gene",ifelse(node2 %in% top_cyto,"Cytokine","FCM"))
-      edges <- rbind(edges, data.frame(Node1=node1, Node2=node2, Type1=type1, Type2=type2,
-                                       Correlation=network_cor[i,j], 
-                                       Edge_Type=ifelse(type1==type2,"Intra","Inter"), stringsAsFactors=FALSE))
-    }
-  }
-  safe_write(edges, "results/tables/Network_edges.csv", row.names=FALSE)
-  network_stats <- edges %>% group_by(Edge_Type) %>% 
-    summarise(N_edges=n(), Mean_abs_cor=mean(abs(Correlation)), .groups="drop")
-  network_results <- list(correlation_matrix=network_cor, edges=edges, stats=network_stats)
-  cat(sprintf("  %d nodes, %d edges\n", nrow(network_cor), nrow(edges)))
-}, error=function(e) cat("✗ Skipped\n"))
-
-# Save Results
 cat("\n=== Saving ===\n")
 results_list <- list(
   master_data=master_data, gene_annotations=gene_annotations, count_matrix=count_matrix, log_cpm=log_cpm,
-  expr_matrix=expr_matrix, expr_mat=expr_mat, cyto_mat=cyto_mat, facs_mat=facs_mat, meta=meta,
-  common_samples=common_samples, DEG_RA_vs_Control=res_df, DIABLO=diablo_results, WGCNA=wgcna_results,
-  Clustering=clustering_results, LOOCV=loocv_results, Pathways=pathway_results, 
-  Module_Enrichment=module_enrichment_results, GSVA=gsva_results, Microbiome=microbiome_results,
-  Cytokines_FACS=cytokine_facs_results, Th17_Correlations=th17_correlations, 
-  Mito_Immune_Axis=mito_immune_results, MachineLearning=ml_results, Infection_Prediction=infection_prediction,
+  expr_matrix=expr_matrix, expr_mat=expr_mat, cyto_mat=cyto_mat, fcm_mat=fcm_mat, meta=meta,
+  common_samples=common_samples, DEG_RA_vs_Control=res_df,
+  GSVA=gsva_results, Microbiome=microbiome_results,
+  Cytokines_FCM=cytokine_fcm_results, Th17_Correlations=th17_correlations,
   Deconvolution=deconv_integration_results, Surfactant_Analysis=surfactant_analysis, 
-  Defense_Model=defense_model, Network=network_results, analysis_date=Sys.time(), R_version=R.version.string
+  analysis_date=Sys.time(), R_version=R.version.string
 )
 save(results_list, file="results/RA_ILD_Multiomics_Results.RData")
 save.image(file="results/RA_ILD_Workspace.RData")
@@ -1045,9 +715,6 @@ cat(sprintf("Samples: %d (RA: %d [ILD: %d, nonILD: %d], Control: %d)\n", nrow(ma
             sum(master_data$Sample_Group=="Control")))
 cat(sprintf("Genes: %d\n", nrow(count_matrix)))
 cat(sprintf("DEGs: %d\n", sum(res_df$Regulation!="NS", na.rm=TRUE)))
-if(!is.null(diablo_results)) cat("DIABLO: ✓\n")
-if(!is.null(wgcna_results)) cat(sprintf("WGCNA: %d modules\n", length(unique(wgcna_results$moduleColors))-1))
-if(!is.null(ml_results)) cat(sprintf("ML AUC: %.3f\n", ml_results$AUC))
 if(deconv_loaded && !is.null(deconv_integration_results)) 
   cat(sprintf("Deconvolution: %d types\n", length(deconv_integration_results$cell_types)))
 cat("\n═══════════════════════════════════════════════════════════\n")

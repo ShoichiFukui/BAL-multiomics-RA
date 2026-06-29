@@ -47,11 +47,10 @@ required, and the expected use of the data.
 ## 4. Reproducing the manuscript results (processed n = 35 dataset)
 
 The analysis code is written to run on the **processed, de-identified n = 35
-dataset** (24 rheumatoid arthritis, 11 sarcoidosis), i.e. after the three
-QC-excluded samples have already been removed. The raw 37-sample data that
-contains the excluded samples is **not distributed**; only the minimal processed
-data required to reproduce the figures, tables, and reported statistics is made
-available, under the access model below.
+dataset** (24 rheumatoid arthritis, 11 sarcoidosis). Patient-level raw data are
+**not distributed**; only the minimal processed data required to reproduce the
+figures, tables, and reported statistics is made available, under the access
+model below.
 
 | Component needed to reproduce | Access |
 |---|---|
@@ -68,7 +67,7 @@ available, under the access model below.
 
 ### Policy note
 This managed/controlled-access arrangement for individual-level human-subjects
-data is consistent with *Nature Communications* data-availability policy, which
+data is consistent with the journal data-availability policy, which
 permits access restrictions for sensitive patient data provided (i) a clear
 data-availability statement specifies the access conditions, and (ii) the data
 underlying the findings are made available to the editors and peer reviewers

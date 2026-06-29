@@ -25,8 +25,8 @@ patient_data/
 master_data*.csv
 RA_ILD_Workspace*.RData
 FCM_integrated_data_transformed.xlsx
-Hosogaya_multiplex_*.xlsx
-multiplex20250422/
+cytokine_multiplex*.xlsx
+cytokine_multiplex_data/
 
 # Large counts / intermediate
 *.h5
@@ -74,3 +74,4 @@ manuscript&figures/
 
 # Slicer Documents output (adjust to your local CT_results path)
 CT_results/
+PUBLIC_CODE_v75_MAPPING_20260625.md

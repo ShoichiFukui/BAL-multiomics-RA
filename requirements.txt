@@ -1,7 +1,11 @@
+# NOTE: scikit-learn 0.23.2 is pinned to reproduce the exact GaussianMixture
+# (CT GMM) results. It requires Python 3.8-3.9. The CT GMM pipeline therefore
+# uses its own environment; a conda env file is recommended for modern systems.
+# The rest of the pipeline (R) is independent of this Python environment.
 # Python dependencies for the CT GMM tissue-classification pipeline
 # (scripts/CT_GMM/lung_gmm_batch_v3_FINAL.py)
 #
-# Tested with Python 3.10 on macOS. Versions listed below are the versions
+# Tested with Python 3.10 on macOS (the CT GMM pipeline requires a SEPARATE Python 3.8-3.9 environment for scikit-learn 0.23.2; see CT_GMM notes). Versions listed below are the versions
 # used in the manuscript analyses; relaxing the version pins should generally
 # work but is not validated.
 

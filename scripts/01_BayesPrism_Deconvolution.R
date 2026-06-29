@@ -24,7 +24,7 @@
 # Initial setup
 # =====================================
 
-# Temporary directory (workaround when default /var/folders/ runs out of space)
+# Temporary directory for large intermediate files
 tmp_dir <- file.path(getwd(), "tmp_R")
 dir.create(tmp_dir, showWarnings = FALSE, recursive = TRUE)
 Sys.setenv(TMPDIR = tmp_dir)
@@ -411,7 +411,7 @@ gc()
 # Strategy: use the peer-reviewed cell type annotations from each public
 #   dataset's original publication directly
 #   ("Cell type labels from the original publications were used"),
-#   avoiding reference-mismatch criticism.
+#   ensuring consistency with the source publications' annotations.
 #
 # Fallback (only when author annotation is absent from metadata):
 #   scoring-based classification using BAL canonical marker genes.
@@ -996,7 +996,7 @@ cat("╔════════════════════════
 cat("║  PART 8: Bulk Data Preparation                              ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-bulk_path <- "./Hosogaya RNAseq/RawCount_heatmap_table.csv"
+bulk_path <- "./RNAseq/RawCount_heatmap_table.csv"
 bulk_raw <- read.csv(bulk_path, row.names = 1)
 
 if ("Cluster_ID" %in% colnames(bulk_raw)) {
@@ -1381,7 +1381,7 @@ if (file.exists(fcm_path)) {
       if (n < 5) return(list(spearman_r = NA, spearman_ci_lo = NA, spearman_ci_hi = NA,
                               pearson_r = NA, n = n))
 
-      sp <- cor.test(bp_vals[valid], fcm_vals[valid], method = "spearman")
+      sp <- cor.test(bp_vals[valid], fcm_vals[valid], method = "spearman", exact = TRUE)
       pe <- cor.test(bp_vals[valid], fcm_vals[valid], method = "pearson")
 
       # Bootstrap 95% CI for Spearman
@@ -1441,39 +1441,39 @@ if (file.exists(fcm_path)) {
     cat("║  Group Concordance: RA-ILD vs Control direction agreement     ║\n")
     cat("╚═══════════════════════════════════════════════════════════════╝\n\n")
     
-    ky_mask <- grepl("^(KY[0-9]|RA[0-9])", common_samples)
-    kyc_mask <- grepl("^(KYC|Sarcoidosis)", common_samples)
+    ra_mask <- grepl("^RA[0-9]", common_samples)
+    sarc_mask <- grepl("^Sarcoidosis", common_samples)
     
-    if (sum(ky_mask) >= 3 && sum(kyc_mask) >= 3) {
-      cat(sprintf("  RA-ILD samples: %d, Control samples: %d\n\n", sum(ky_mask), sum(kyc_mask)))
+    if (sum(ra_mask) >= 3 && sum(sarc_mask) >= 3) {
+      cat(sprintf("  RA-ILD samples: %d, Control samples: %d\n\n", sum(ra_mask), sum(sarc_mask)))
       
       concordance_table <- data.frame(
         CellType = character(),
-        FCM_KY_mean = numeric(), FCM_KYC_mean = numeric(), FCM_direction = character(),
-        BP_KY_mean = numeric(), BP_KYC_mean = numeric(), BP_direction = character(),
+        FCM_RA_mean = numeric(), FCM_Sarc_mean = numeric(), FCM_direction = character(),
+        BP_RA_mean = numeric(), BP_Sarc_mean = numeric(), BP_direction = character(),
         Concordant = character(),
         stringsAsFactors = FALSE
       )
       
       # Group comparison using the cell fraction version
-      compare_groups <- function(bp_vals, fcm_vals, ky_mask, kyc_mask, cell_name) {
-        fcm_ky <- mean(fcm_vals[ky_mask], na.rm = TRUE)
-        fcm_kyc <- mean(fcm_vals[kyc_mask], na.rm = TRUE)
-        fcm_dir <- ifelse(fcm_ky > fcm_kyc, "KY > KYC", "KY < KYC")
+      compare_groups <- function(bp_vals, fcm_vals, ra_mask, sarc_mask, cell_name) {
+        fcm_ra <- mean(fcm_vals[ra_mask], na.rm = TRUE)
+        fcm_sarc <- mean(fcm_vals[sarc_mask], na.rm = TRUE)
+        fcm_dir <- ifelse(fcm_ra > fcm_sarc, "RA > Sarcoidosis", "RA < Sarcoidosis")
         
-        bp_ky <- mean(bp_vals[ky_mask], na.rm = TRUE)
-        bp_kyc <- mean(bp_vals[kyc_mask], na.rm = TRUE)
-        bp_dir <- ifelse(bp_ky > bp_kyc, "KY > KYC", "KY < KYC")
+        bp_ra <- mean(bp_vals[ra_mask], na.rm = TRUE)
+        bp_sarc <- mean(bp_vals[sarc_mask], na.rm = TRUE)
+        bp_dir <- ifelse(bp_ra > bp_sarc, "RA > Sarcoidosis", "RA < Sarcoidosis")
         
         concordant <- ifelse(fcm_dir == bp_dir, "✓ YES", "✗ NO")
         
         data.frame(
           CellType = cell_name,
-          FCM_KY_mean = round(fcm_ky, 1),
-          FCM_KYC_mean = round(fcm_kyc, 1),
+          FCM_RA_mean = round(fcm_ra, 1),
+          FCM_Sarc_mean = round(fcm_sarc, 1),
           FCM_direction = fcm_dir,
-          BP_KY_mean = round(bp_ky, 1),
-          BP_KYC_mean = round(bp_kyc, 1),
+          BP_RA_mean = round(bp_ra, 1),
+          BP_Sarc_mean = round(bp_sarc, 1),
           BP_direction = bp_dir,
           Concordant = concordant,
           stringsAsFactors = FALSE
@@ -1481,20 +1481,20 @@ if (file.exists(fcm_path)) {
       }
       
       concordance_table <- rbind(
-        compare_groups(bp_mac_cell, fcm_mac_vals, ky_mask, kyc_mask, "Macrophage"),
-        compare_groups(bp_lymph_cell, fcm_lym_vals, ky_mask, kyc_mask, "Lymphocyte"),
-        compare_groups(bp_neut_cell, fcm_neut_vals, ky_mask, kyc_mask, "Neutrophil")
+        compare_groups(bp_mac_cell, fcm_mac_vals, ra_mask, sarc_mask, "Macrophage"),
+        compare_groups(bp_lymph_cell, fcm_lym_vals, ra_mask, sarc_mask, "Lymphocyte"),
+        compare_groups(bp_neut_cell, fcm_neut_vals, ra_mask, sarc_mask, "Neutrophil")
       )
       
       cat(sprintf("%-12s %10s %10s %12s %10s %10s %12s %10s\n",
-                  "CellType", "FCM_KY", "FCM_KYC", "FCM_dir", "BP_KY", "BP_KYC", "BP_dir", "Concordant"))
+                  "CellType", "FCM_RA", "FCM_Sarc", "FCM_dir", "BP_RA", "BP_Sarc", "BP_dir", "Concordant"))
       cat(paste(rep("-", 95), collapse = ""), "\n")
       for (r in 1:nrow(concordance_table)) {
         cat(sprintf("%-12s %9.1f%% %9.1f%% %12s %9.1f%% %9.1f%% %12s %10s\n",
                     concordance_table$CellType[r],
-                    concordance_table$FCM_KY_mean[r], concordance_table$FCM_KYC_mean[r],
+                    concordance_table$FCM_RA_mean[r], concordance_table$FCM_Sarc_mean[r],
                     concordance_table$FCM_direction[r],
-                    concordance_table$BP_KY_mean[r], concordance_table$BP_KYC_mean[r],
+                    concordance_table$BP_RA_mean[r], concordance_table$BP_Sarc_mean[r],
                     concordance_table$BP_direction[r],
                     concordance_table$Concordant[r]))
       }
@@ -1527,12 +1527,12 @@ if (file.exists(fcm_path)) {
         if (sum(valid) >= 3) {
           abline(lm(bp[valid] ~ fcm[valid]), col = color, lwd = 2)
         }
-        # Distinguish KY/KYC by symbol
-        ky_pts <- grepl("^(KY[0-9]|RA[0-9])", common_samples) & valid
-        kyc_pts <- grepl("^(KYC|Sarcoidosis)", common_samples) & valid
-        points(fcm[ky_pts], bp[ky_pts], pch = 19, col = adjustcolor("red", 0.6), cex = 1.2)
-        points(fcm[kyc_pts], bp[kyc_pts], pch = 17, col = adjustcolor("blue", 0.6), cex = 1.2)
-        legend("topleft", c("RA-ILD (KY)", "Control (KYC)"),
+        # Distinguish RA/Sarcoidosis by symbol
+        ra_pts <- grepl("^RA[0-9]", common_samples) & valid
+        sarc_pts <- grepl("^Sarcoidosis", common_samples) & valid
+        points(fcm[ra_pts], bp[ra_pts], pch = 19, col = adjustcolor("red", 0.6), cex = 1.2)
+        points(fcm[sarc_pts], bp[sarc_pts], pch = 17, col = adjustcolor("blue", 0.6), cex = 1.2)
+        legend("topleft", c("RA", "Sarcoidosis"),
                pch = c(19, 17), col = c("red", "blue"), cex = 0.8, bty = "n")
       }
       
@@ -1556,7 +1556,7 @@ if (file.exists(fcm_path)) {
     # --- Validation results CSV (comprehensive) ---
     validation_df <- data.frame(
       Sample = common_samples,
-      Group = ifelse(grepl("^(KY[0-9]|RA[0-9])", common_samples), "RA-ILD", "Control"),
+      Group = ifelse(grepl("^RA[0-9]", common_samples), "RA-ILD", "Control"),
       BP_Mac_RNA = bp_mac_rna,
       BP_Lymph_RNA = bp_lymph_rna,
       BP_Neut_RNA = bp_neut_rna,
@@ -1601,34 +1601,34 @@ if (file.exists(fcm_path)) {
 }
 
 # =====================================
-# PART 11: KY vs KYC group comparison
+# PART 11: RA vs Sarcoidosis group comparison
 # =====================================
 
 cat("\n")
 cat("╔══════════════════════════════════════════════════════════════╗\n")
-cat("║  PART 11: RA-ILD (KY) vs Control (KYC) Comparison           ║\n")
+cat("║  PART 11: RA vs Sarcoidosis Comparison           ║\n")
 cat("╚══════════════════════════════════════════════════════════════╝\n\n")
 
-ky_samples  <- grep("^(KY[0-9]|RA[0-9])", rownames(theta), value = TRUE)
-kyc_samples <- grep("^(KYC|Sarcoidosis)", rownames(theta), value = TRUE)
+ra_samples  <- grep("^RA[0-9]", rownames(theta), value = TRUE)
+sarc_samples <- grep("^Sarcoidosis", rownames(theta), value = TRUE)
 
-cat(sprintf("KY samples (RA-ILD): n=%d\n", length(ky_samples)))
-cat(sprintf("KYC samples (Control): n=%d\n", length(kyc_samples)))
+cat(sprintf("RA samples: n=%d\n", length(ra_samples)))
+cat(sprintf("Sarcoidosis samples: n=%d\n", length(sarc_samples)))
 
 # --- 11a: Cell fraction version (RNA content corrected, comparable to FCM) ---
 cat("\n--- Cell Fraction (RNA content corrected) ---\n")
 cat(sprintf("%-20s %12s %12s %10s %8s\n",
-            "Cell Type", "KY (RA-ILD)", "KYC (Ctrl)", "p-value", "Sig"))
+            "Cell Type", "RA", "Sarcoidosis", "p-value", "Sig"))
 cat(paste(rep("-", 65), collapse = ""), "\n")
 
 comparison_results <- data.frame()
 
 for (ct in colnames(theta_cell)) {
-  ky_vals  <- theta_cell[ky_samples, ct] * 100
-  kyc_vals <- theta_cell[kyc_samples, ct] * 100
+  ra_vals  <- theta_cell[ra_samples, ct] * 100
+  sarc_vals <- theta_cell[sarc_samples, ct] * 100
   
-  if (sd(ky_vals) > 0 & sd(kyc_vals) > 0 & length(ky_vals) >= 3 & length(kyc_vals) >= 3) {
-    wtest <- wilcox.test(ky_vals, kyc_vals, exact=TRUE)
+  if (sd(ra_vals) > 0 & sd(sarc_vals) > 0 & length(ra_vals) >= 3 & length(sarc_vals) >= 3) {
+    wtest <- wilcox.test(ra_vals, sarc_vals, exact=TRUE)
     pval <- wtest$p.value
     sig <- ifelse(pval < 0.001, "***",
                   ifelse(pval < 0.01, "**",
@@ -1639,16 +1639,16 @@ for (ct in colnames(theta_cell)) {
   }
   
   cat(sprintf("%-20s %11.1f%% %11.1f%% %10s %8s\n",
-              ct, mean(ky_vals), mean(kyc_vals),
+              ct, mean(ra_vals), mean(sarc_vals),
               ifelse(is.na(pval), "NA", sprintf("%.4f", pval)), sig))
   
   comparison_results <- rbind(comparison_results, data.frame(
     CellType = ct,
     Version = "Cell_fraction",
-    KY_Mean = mean(ky_vals),
-    KYC_Mean = mean(kyc_vals),
-    KY_SD = sd(ky_vals),
-    KYC_SD = sd(kyc_vals),
+    RA_Mean = mean(ra_vals),
+    Sarc_Mean = mean(sarc_vals),
+    RA_SD = sd(ra_vals),
+    Sarc_SD = sd(sarc_vals),
     p_value = pval,
     Significance = sig
   ))
@@ -1657,15 +1657,15 @@ for (ct in colnames(theta_cell)) {
 # --- 11b: RNA fraction version (reference) ---
 cat("\n--- RNA Fraction (uncorrected, for reference) ---\n")
 cat(sprintf("%-20s %12s %12s %10s %8s\n",
-            "Cell Type", "KY (RA-ILD)", "KYC (Ctrl)", "p-value", "Sig"))
+            "Cell Type", "RA", "Sarcoidosis", "p-value", "Sig"))
 cat(paste(rep("-", 65), collapse = ""), "\n")
 
 for (ct in colnames(theta)) {
-  ky_vals  <- theta[ky_samples, ct] * 100
-  kyc_vals <- theta[kyc_samples, ct] * 100
+  ra_vals  <- theta[ra_samples, ct] * 100
+  sarc_vals <- theta[sarc_samples, ct] * 100
   
-  if (sd(ky_vals) > 0 & sd(kyc_vals) > 0 & length(ky_vals) >= 3 & length(kyc_vals) >= 3) {
-    wtest <- wilcox.test(ky_vals, kyc_vals, exact=TRUE)
+  if (sd(ra_vals) > 0 & sd(sarc_vals) > 0 & length(ra_vals) >= 3 & length(sarc_vals) >= 3) {
+    wtest <- wilcox.test(ra_vals, sarc_vals, exact=TRUE)
     pval <- wtest$p.value
     sig <- ifelse(pval < 0.001, "***",
                   ifelse(pval < 0.01, "**",
@@ -1676,28 +1676,28 @@ for (ct in colnames(theta)) {
   }
   
   cat(sprintf("%-20s %11.1f%% %11.1f%% %10s %8s\n",
-              ct, mean(ky_vals), mean(kyc_vals),
+              ct, mean(ra_vals), mean(sarc_vals),
               ifelse(is.na(pval), "NA", sprintf("%.4f", pval)), sig))
   
   comparison_results <- rbind(comparison_results, data.frame(
     CellType = ct,
     Version = "RNA_fraction",
-    KY_Mean = mean(ky_vals),
-    KYC_Mean = mean(kyc_vals),
-    KY_SD = sd(ky_vals),
-    KYC_SD = sd(kyc_vals),
+    RA_Mean = mean(ra_vals),
+    Sarc_Mean = mean(sarc_vals),
+    RA_SD = sd(ra_vals),
+    Sarc_SD = sd(sarc_vals),
     p_value = pval,
     Significance = sig
   ))
 }
 
-write.csv(comparison_results, file.path(output_dir, "KY_vs_KYC_comparison_BayesPrism.csv"),
+write.csv(comparison_results, file.path(output_dir, "RA_vs_Sarcoidosis_comparison_BayesPrism.csv"),
           row.names = FALSE)
 
 # Group comparison plot (cell fraction version shown as the main result)
 theta_long <- as.data.frame(theta_cell) %>%
   rownames_to_column("Sample") %>%
-  mutate(Group = ifelse(grepl("^(KYC|Sarcoidosis)", Sample), "Control (KYC)", "RA-ILD (KY)")) %>%
+  mutate(Group = ifelse(grepl("^Sarcoidosis", Sample), "Sarcoidosis", "RA")) %>%
   pivot_longer(cols = -c(Sample, Group), names_to = "CellType", values_to = "Fraction")
 
 p_comparison <- ggplot(theta_long, aes(x = CellType, y = Fraction * 100, fill = Group)) +
@@ -1707,9 +1707,9 @@ p_comparison <- ggplot(theta_long, aes(x = CellType, y = Fraction * 100, fill = 
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10)) +
   labs(title = "Cell Type Proportions: RA-ILD vs Control (BayesPrism, RNA content corrected)",
        x = "", y = "Proportion (%)") +
-  scale_fill_manual(values = c("Control (KYC)" = "steelblue", "RA-ILD (KY)" = "coral"))
+  scale_fill_manual(values = c("Sarcoidosis" = "steelblue", "RA" = "coral"))
 
-ggsave(file.path(output_dir, "KY_vs_KYC_boxplot_BayesPrism.pdf"), p_comparison, width = 14, height = 8)
+ggsave(file.path(output_dir, "RA_vs_Sarcoidosis_boxplot_BayesPrism.pdf"), p_comparison, width = 14, height = 8)
 
 # =====================================
 # PART 12: Visualization and saving results

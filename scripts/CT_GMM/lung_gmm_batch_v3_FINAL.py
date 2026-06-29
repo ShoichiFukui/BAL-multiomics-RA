@@ -318,12 +318,14 @@ def save_patient_results(result, output_name, output_dir, gmm_info=None,
 def collect_dicom_metadata(patients, output_dir):
     import pydicom
     print("\nCollecting DICOM metadata...")
-    tags = [("PatientID",0x0010,0x0020),("PatientName",0x0010,0x0010),
-            ("PatientBirthDate",0x0010,0x0030),("PatientSex",0x0010,0x0040),
+    # De-identified by default: direct identifiers (PatientName, PatientID,
+    # PatientBirthDate, InstitutionName) are intentionally NOT extracted, so this
+    # public pipeline never emits patient-identifying information. Only
+    # acquisition/technical metadata (scanner, model, modality) is collected.
+    tags = [("PatientSex",0x0010,0x0040),
             ("PatientAge",0x0010,0x1010),("StudyDate",0x0008,0x0020),
             ("StudyDescription",0x0008,0x1030),("Modality",0x0008,0x0060),
-            ("Manufacturer",0x0008,0x0070),("ManufacturerModelName",0x0008,0x1090),
-            ("InstitutionName",0x0008,0x0080)]
+            ("Manufacturer",0x0008,0x0070),("ManufacturerModelName",0x0008,0x1090)]
     rows = []
     for p in patients:
         dcm_files = [f for f in os.listdir(p["path"]) if not f.startswith('.')]
@@ -341,15 +343,9 @@ def collect_dicom_metadata(patients, output_dir):
                            "output_name": f"{p['name']}_{d}"}
                     for tag_name, g, e in tags:
                         elem = ds.get((g,e), None)
-                        if elem is not None:
-                            v = elem.value
-                            if tag_name == "PatientName":
-                                pn = str(v); parts = pn.split('=')
-                                row[tag_name] = parts[-1] if len(parts) > 1 else parts[0]
-                            else: row[tag_name] = str(v)
-                        else: row[tag_name] = ""
+                        row[tag_name] = str(elem.value) if elem is not None else ""
                     rows.append(row)
-                    print(f"  {row['output_name']}: {row.get('PatientName','')} / {d}")
+                    print(f"  {row['output_name']} / {d}")
                     break
                 except: pass
     fieldnames = ["folder_name", "study_date", "output_name"] + [t[0] for t in tags]
