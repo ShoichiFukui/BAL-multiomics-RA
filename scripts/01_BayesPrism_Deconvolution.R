@@ -1219,8 +1219,8 @@ gc()
 #   cell_fraction_i = (theta_i / RNA_content_i) / sum(theta_j / RNA_content_j)
 #
 # Reference:
-#   Tsoucas et al. (2019) Nature Communications: BayesPrism considers this
-#   Newman et al. (2019) Nature Biotechnology: CIBERSORTx S-mode addresses same issue
+#   Tsoucas et al. (2019): BayesPrism considers this
+#   Newman et al. (2019): CIBERSORTx S-mode addresses the same issue
 #
 
 cat("\n")
@@ -1906,7 +1906,7 @@ cat("  neighbor classification (k=20) in the Harmony-corrected embedding\n")
 cat("  space. To convert RNA-fraction estimates to cell-fraction proportions\n")
 cat("  comparable with flow cytometry, we applied post-hoc RNA content\n")
 cat("  correction using median UMI counts per cell type from the scRNA-seq\n")
-cat("  reference (Jew et al., Nature Communications, 2020). Deconvolution\n")
+cat("  reference (Jew et al., 2020). Deconvolution\n")
 cat("  estimates were validated against paired flow cytometry measurements\n")
 cat("  using Spearman rank correlation and concordance of group-level\n")
 cat("  differences (RA-ILD vs control).\n")

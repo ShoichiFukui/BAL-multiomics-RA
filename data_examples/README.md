@@ -23,9 +23,8 @@ data_examples/
 │   └── celltype_proportions_cellFraction.csv
 ├── results/
 │   ├── RA_ILD_Workspace.RData      # master workspace built by 02_*
-│   └── NatComm/
-│       ├── tables/                 # CSV result tables
-│       └── panels/                 # PNG/PDF figure panels
+│   ├── tables/                 # CSV result tables
+│   └── panels/                 # PNG/PDF figure panels
 └── CT_GMM_score/                   # per-patient GMM JSON outputs
     └── <patient_id>_<study_date>/
         └── gmm_results.json

@@ -1,7 +1,22 @@
 # Changelog
 
+## v1.1.1 (2026-07-10)
+Clarified multiple-testing (FDR) families and made the release journal-neutral.
+
+- **Multiple-testing families.** The BH-adjusted P values in Supplementary Table 4 are
+  corrected only within that 17-variable exploratory comparison table and are NOT
+  study-wide FDR values (its multi-omics markers were selected from the top of the full
+  screens). Study-wide FDR for the two headline findings is reported in Supplementary
+  Data 3 (infection screen, 143 markers; BAL Th17.1 BH P = 0.112) and Supplementary
+  Data 7 (CT progression screen, 117 markers; PB Th17 BH P = 0.451). These are the
+  values quoted in the manuscript Abstract.
+- `06_Comprehensive_Figures.R`: the Supplementary Table 4 sheet now also emits the
+  within-table BH-adjusted P columns, so the released code reproduces the submitted table.
+- `scripts/README.md`: correction-family documentation expanded accordingly.
+- Documentation, comments and output filenames made journal-neutral.
+
 ## v1.1.0 (2026-06-30)
-Synchronized with the Nature Communications submission; the released pipeline now
+Synchronized with the manuscript submission; the released pipeline now
 contains only manuscript-reported analyses.
 
 - Removed orphan analyses not in the manuscript/SI: GO-MF GSEA, elastic-net CT

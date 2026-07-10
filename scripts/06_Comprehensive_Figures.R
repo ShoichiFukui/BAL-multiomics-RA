@@ -1944,11 +1944,20 @@ add_sheet("ST5","Supplementary Data 4. BAL microbiome genus-level comparison by 
   d[,c("Genus","Mean_InfPos","Mean_InfNeg","Log2FC","P_value","P_adjusted")])
 
 ## ST6 = clinical markers vs multi-omics
+## NOTE ON MULTIPLE TESTING: the BH-adjusted P values below are corrected ONLY across the
+## variables of this exploratory comparison table (n = 17). They are NOT study-wide FDR values,
+## because the multi-omics markers in this table were selected from the top of the full screens.
+## Study-wide FDR is reported in Supplementary Data 3 (infection, 143 markers; see line ~1382)
+## and Supplementary Data 7 (CT progression, 117 markers; analysis_modules/CT_Multiomics.R).
 d<-read.csv(file.path(TBL,"Clinical_vs_Multiomics_Comparison.csv"),check.names=FALSE)
-d$Inf_AUC<-rnd(d$Inf_AUC,3); d$Inf_P<-rnd(d$Inf_P,3); d$Prog_AUC<-rnd(d$Prog_AUC,3); d$Prog_P<-rnd(d$Prog_P,3)
+d$Inf_Padj  <- p.adjust(d$Inf_P,  method="BH")   # within-table only (n = 17)
+d$Prog_Padj <- p.adjust(d$Prog_P, method="BH")   # within-table only (n = 17)
+d$Inf_AUC<-rnd(d$Inf_AUC,3); d$Inf_P<-rnd(d$Inf_P,3); d$Inf_Padj<-sgf(d$Inf_Padj,3)
+d$Prog_AUC<-rnd(d$Prog_AUC,3); d$Prog_P<-rnd(d$Prog_P,3); d$Prog_Padj<-sgf(d$Prog_Padj,3)
 add_sheet("ST6","Supplementary Table 4. Clinical markers versus multi-omics biomarkers (exploratory).",
-  c("Category","Variable","Infection\nAUC","Infection\nP value","Progression\nAUC","Progression\nP value"),
-  d[,c("Category","Variable","Inf_AUC","Inf_P","Prog_AUC","Prog_P")])
+  c("Category","Variable","Infection\nAUC","Infection\nP value","Infection\nBH-adj P (within table)",
+    "Progression\nAUC","Progression\nP value","Progression\nBH-adj P (within table)"),
+  d[,c("Category","Variable","Inf_AUC","Inf_P","Inf_Padj","Prog_AUC","Prog_P","Prog_Padj")])
 
 ## ST7 = profiles by ILD status, sorted by ascending P
 d<-read.csv(file.path(TBL,"ST4_ILD_stratification_updated.csv"),check.names=FALSE); d<-d[order(d$P_value),]

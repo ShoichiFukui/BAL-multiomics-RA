@@ -88,7 +88,13 @@ python scripts/CT_GMM/lung_gmm_batch_v3_FINAL.py
   tests jointly adjusted) is stated in each Supplementary Table/Data legend.
   Secondary, small-sample analyses (Supplementary Tables 4-5 and the infection
   prediction model) are exploratory and reported with both nominal and
-  BH-adjusted P values.
+  BH-adjusted P values. IMPORTANT: the BH-adjusted P values in Supplementary
+  Table 4 are corrected only within that 17-variable exploratory table and are
+  NOT study-wide FDR values (its multi-omics markers were selected from the top
+  of the full screens). Study-wide FDR for the two headline findings is reported
+  in Supplementary Data 3 (infection screen, 143 markers; BAL Th17.1 BH P = 0.112)
+  and Supplementary Data 7 (CT progression screen, 117 markers; PB Th17
+  BH P = 0.451); these are the values quoted in the manuscript Abstract.
 - Cohort: n = 35 (RA = 24, sarcoidosis = 11).
 
 ## Cohort definitions

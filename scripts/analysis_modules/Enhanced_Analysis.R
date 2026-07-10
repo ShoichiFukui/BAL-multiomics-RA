@@ -525,8 +525,8 @@ report$samples <- list(
   RA_nonILD=sum(meta$Subgroup=="RA_nonILD", na.rm=TRUE)
 )
 
-saveRDS(report, file.path(out_dir, "NatComm_Report.rds"))
-save.image(file.path(out_dir, "NatComm_Workspace.RData"))
+saveRDS(report, file.path(out_dir, "Analysis_Report.rds"))
+save.image(file.path(out_dir, "Analysis_Workspace.RData"))
 
 cat("\n╔═══════════════════════════════════════════════════════════════╗\n")
 cat("║  Analysis Complete                                            ║\n")
