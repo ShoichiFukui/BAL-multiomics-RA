@@ -113,7 +113,10 @@ Rscript scripts/02_PostDeconvolution.R
 # 3. Run primary analyses (DEG, GSEA, GSVA, infection, CT progression)
 Rscript scripts/03_Analysis.R
 
-# 4. RA-specific MOFA2 (the full-cohort 6-view MOFA2 is built within step 3)
+# 4. RA-specific MOFA2 (the full-cohort 6-view MOFA2 is fit within step 3 from the
+#    processed input results/Integration_7layers_Results.RData, provided on request
+#    with the controlled-access data package; feature selection is described in the
+#    Supplementary Methods)
 Rscript scripts/05_MOFA2_RA_only.R
 
 # 5. Generate all primary figure panels

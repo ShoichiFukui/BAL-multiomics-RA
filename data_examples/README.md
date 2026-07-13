@@ -43,6 +43,7 @@ re-running BayesPrism or MOFA2**. Place the package contents at the project root
 |---|---|---|
 | `clinical_metadata.xlsx`, `cytokine_multiplex.xlsx`, `FCM_integrated_data_transformed.xlsx`, `RA_CT_transformed.xlsx`, `ct_lung_analysis_merged.xlsx` (PHI removed), `sample_id_mapping.xlsx`, `RNAseq/RawCount_heatmap_table.csv`, `OTU…csv`, `data/raw/41plex_healthy_control.xlsx` | `02_*`, `03_*` | project root |
 | `output_v3_BayesPrism/celltype_proportions_*.csv` and `BAL_reference_author_annotated.rds` | deconvolution + Fig 1 UMAPs | `output_v3_BayesPrism/` |
+| `results/Integration_7layers_Results.RData` | **input** to the full-cohort 6-view MOFA2 fit in `03_*` (object `layers`; feature selection per Supplementary Methods) | `results/` |
 | `results/MOFA2_6views_Results.RData`, `results/MOFA2_RA_only_Results.RData` | MOFA factors (Fig 2l, Fig 5) | `results/` |
 | `results/CT_Multiomics_Results.RData`, `results/RA_ILD_Workspace.RData` | CT + master data | `results/` |
 | `results/tables/*.csv` (processed result tables) and `results/tables/Supplementary_Tables.xlsx` | figure panels + supplementary tables | `results/tables/` |

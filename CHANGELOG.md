@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1.2 (2026-07-13)
+Clarified reproducibility of the full-cohort 6-view MOFA2 model.
+
+- `03_Analysis.R`: documented that the MOFA input `results/Integration_7layers_Results.RData`
+  (object `layers`) is a patient-level processed intermediate provided on request with the
+  controlled-access data package (not committed to this repository), and that its feature
+  selection is specified in the Supplementary Methods (Expression, top 20 genes; BAL and
+  serum cytokines, top 15 each by log2-scale variance; flow cytometry and genus-level
+  microbiome retained after removing zero-variance features; 6-view, 92 features). The load
+  now fails with an explicit message pointing to `docs/data_availability.md` instead of being
+  reported as a Python/MOFA2 environment error.
+- `README.md`, `scripts/README.md`: corrected the statement that the 6-view MOFA2 is "built
+  directly in 03_Analysis.R" to reflect that it is *fit* from the provided processed input.
+- `data_examples/README.md`: added `Integration_7layers_Results.RData` to the controlled-access
+  processed-data manifest. No patient-level data are added to the repository.
+
 ## v1.1.1 (2026-07-10)
 Clarified multiple-testing (FDR) families and made the release journal-neutral.
 

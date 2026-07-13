@@ -77,8 +77,21 @@ tryCatch({
     suppressPackageStartupMessages({ library(reticulate); use_python(BSPY, required=TRUE) })
   }
 
-  # Load pre-cleaned data from Integration step
-  load(file.path(out_dir, "Integration_7layers_Results.RData"))
+  # Load the processed MOFA input (object `layers`). Because it holds patient-level
+  # multi-omics values, it is NOT committed to this public repository; it is provided
+  # as a processed intermediate with the controlled-access data package on request
+  # (see docs/data_availability.md) and placed under results/. Its feature selection
+  # is described in the Supplementary Methods: Expression = top 20 genes and BAL and
+  # serum cytokines = top 15 each by log2-scale variance; flow cytometry and genus-level
+  # microbiome features are retained after removing zero-variance features (6-view,
+  # 92 features: Expression 20, BAL Cytokine 15, Serum Cytokine 15, BAL FCM 11,
+  # PB FCM 9, Microbiome 22).
+  int_file <- file.path(out_dir, "Integration_7layers_Results.RData")
+  if (!file.exists(int_file))
+    stop("results/Integration_7layers_Results.RData not found. It is a patient-level ",
+         "processed intermediate provided with the controlled-access data package ",
+         "(see docs/data_availability.md).")
+  load(int_file)
 
   # Build 6 independent views (no Deconv/GSVA — RNA-seq derivatives)
   d7 <- list()
