@@ -1,23 +1,22 @@
-# NOTE: scikit-learn 0.23.2 is pinned to reproduce the exact GaussianMixture
-# (CT GMM) results. It requires Python 3.8-3.9. The CT GMM pipeline therefore
-# uses its own environment; a conda env file is recommended for modern systems.
-# The rest of the pipeline (R) is independent of this Python environment.
-# Python dependencies for the CT GMM tissue-classification pipeline
-# (scripts/CT_GMM/lung_gmm_batch_v3_FINAL.py)
+# Python dependencies. Two separate environments are needed.
 #
-# Tested with Python 3.10 on macOS (the CT GMM pipeline requires a SEPARATE Python 3.8-3.9 environment for scikit-learn 0.23.2; see CT_GMM notes). Versions listed below are the versions
-# used in the manuscript analyses; relaxing the version pins should generally
-# work but is not validated.
+# (1) CT GMM tissue classification (scripts/CT_GMM/lung_gmm_batch.py)
+#     Versions of the environment in which the article's CT measures were computed (recorded by the pipeline in
+#     analysis_config.json: Python 3.12.13, torch 2.2.2, scikit-learn 1.8.0; the others from that environment):
+numpy==1.26.4
+scipy==1.17.1
+scikit-learn==1.8.0
+SimpleITK==2.5.3
+pydicom==3.0.2
+lungmask==0.2.20         # AI lung segmentation (U-net R231); requires PyTorch
+torch==2.2.2
+matplotlib==3.10.8
 
-numpy>=1.24
-scipy>=1.10
-scikit-learn==0.23.2     # GMM model parameters tuned for this version (Zaffino et al. 2021)
-SimpleITK>=2.2
-pydicom>=2.3
-lungmask>=0.2.16         # AI lung segmentation (U-net R231); requires PyTorch
-torch>=1.13
-matplotlib>=3.6
+# (2) MOFA2 backend, used from R through reticulate (set MOFA_PYTHON to this interpreter); any current Python 3.
+#     Install in a separate environment with:  pip install mofapy2
+# mofapy2
 
-# For optional interactive notebook (scripts/CT_GMM/lung_gmm_interactive.ipynb):
-#   3D Slicer ≥ 5.x
-#   SlicerDensityLungSegmentation extension (https://github.com/pzaffino/SlicerDensityLungSegmentation)
+# Optional: 3D Slicer >= 5 with the SlicerDensityLungSegmentation extension. The notebook's stored kernel metadata (Python 3.14)
+#   reflects the machine on which the notebook was last saved; it runs inside Slicer's own Python and does not use the CT GMM
+#   environment above.
+#   (https://github.com/pzaffino/SlicerDensityLungSegmentation), only for scripts/CT_GMM/lung_gmm_interactive.ipynb.

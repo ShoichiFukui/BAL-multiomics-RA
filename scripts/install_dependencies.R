@@ -1,17 +1,16 @@
-# ============================================================================
 # install_dependencies.R
 # One-shot installation of all R packages used in the BAL multi-omics
 # analysis pipeline. Run once before executing any of the analysis scripts.
 #
 # Usage:  Rscript install_dependencies.R
-# ============================================================================
 
 # ---- CRAN packages ----
 cran_pkgs <- c(
-  "tidyverse", "patchwork", "ggrepel", "pheatmap", "corrplot", "gridExtra",
-  "openxlsx", "readxl", "pROC", "randomForest", "caret", "glmnet", "effsize",
+  "tidyverse", "patchwork", "ggrepel", "msigdbr",
+  "readxl", "pROC", "effsize",
   "vegan", "future", "reticulate", "hdf5r", "devtools", "BiocManager",
-  "Seurat", "harmony"
+  "Seurat", "harmony", "survival", "coxphf", "logistf", "ppcor", "DescTools",
+  "jsonlite", "png", "magick"
 )
 missing_cran <- cran_pkgs[!(cran_pkgs %in% installed.packages()[, "Package"])]
 if (length(missing_cran) > 0) {
@@ -20,8 +19,8 @@ if (length(missing_cran) > 0) {
 
 # ---- Bioconductor packages ----
 bioc_pkgs <- c(
-  "DESeq2", "apeglm", "edgeR", "clusterProfiler",
-  "AnnotationDbi", "org.Hs.eg.db", "biomaRt",
+  "DESeq2", "edgeR", "clusterProfiler",
+  "AnnotationDbi", "org.Hs.eg.db",
   "GSVA", "SingleCellExperiment", "MOFA2", "fgsea"
 )
 missing_bioc <- bioc_pkgs[!(bioc_pkgs %in% installed.packages()[, "Package"])]
@@ -35,6 +34,8 @@ if (!requireNamespace("BayesPrism", quietly = TRUE)) {
   devtools::install_github("Danko-Lab/BayesPrism/BayesPrism")
 }
 
-cat("\nAll dependencies installed.\n")
-cat("Reminder: MOFA2 requires a working Python environment with the 'mofapy2'\n")
-cat("package. See https://biofam.github.io/MOFA2/.\n")
+
+# ---- Python backend of MOFA2 (scripts 04, 05) ----
+# MOFA2 trains through the Python package mofapy2 (version used: 0.7.4). Install it in the Python environment given by MOFA_PYTHON:
+#   python3 -m pip install mofapy2==0.7.4
+# Versions of the environment in which the scripts were checked against the article: ../docs/package_versions.txt

@@ -1,84 +1,65 @@
 # Data availability
 
-This document describes the data underlying the manuscript and how each data
-type can be accessed by external investigators.
+This document describes the data underlying the article and how each data type
+can be accessed.
 
-## 1. Public sequence repositories
+## 1. Public repositories
 
-| Modality | Repository | Accession | Status | URL |
+| Data | Repository | Accession | Status | URL |
 |---|---|---|---|---|
-| BAL RNA-seq (FASTQ + counts) | NCBI GEO | **GSE329884** | Approved; public release 2027-05-02 | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE329884 |
+| BAL RNA-seq (FASTQ + counts) | NCBI GEO | **GSE329884** | Approved; public release 2027-05-02. The released series holds the 31 analysed samples | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE329884 |
 | 16S rRNA microbiome (FASTQ) | NCBI SRA / BioProject | **PRJNA1462027** | Submitted | https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1462027 |
 | Public scRNA-seq BAL reference (COVID-19) | NCBI GEO | GSE145926 | Public | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE145926 |
-| Public scRNA-seq BAL reference (Healthy) | NCBI GEO | GSE193782 | Public | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE193782 |
-| Public scRNA-seq BAL reference (Sarcoidosis) | NCBI GEO | GSE184735 | Public | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE184735 |
+| Public scRNA-seq BAL reference (healthy) | NCBI GEO | GSE193782 | Public | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE193782 |
+| Public scRNA-seq BAL reference (sarcoidosis) | NCBI GEO | GSE184735 | Public | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE184735 |
+| Genome-wide DESeq2 and GSEA tables of the article | Zenodo / GitHub (this repository, `results/`) | 10.5281/zenodo.20699675 | Open | https://github.com/ShoichiFukui/BAL-multiomics-RA |
 
-## 2. Data restricted under the IRB protocol
+## 2. Data provided with the article
 
-The following datasets contain potentially identifying clinical metadata and
-are **not deposited in a public repository**:
+The Source Data file (per-panel values with de-identified labels `RA#` /
+`Sarcoidosis#`), Table 1, Supplementary Tables 1–8 and Supplementary Data 1–9.
 
-- Clinical baseline characteristics, disease activity scores, medication
-  histories
-- Longitudinal CT imaging (DICOM) and derived GMM tissue fractions
-- BAL and serum cytokine concentrations (41-plex Luminex panel)
-- BAL and peripheral blood flow cytometry (FCS files / gated proportions)
-- Prospective infection ascertainment records
+## 3. Individual-level data (on request)
 
-These data are available **from the corresponding author on reasonable request
-to qualified investigators**, subject to:
+The following data contain potentially identifying clinical information and are
+not deposited in a public repository:
 
-1. An institutional data sharing agreement with Nagasaki University Hospital,
-2. Review and approval of the request by the Nagasaki University Hospital
-   Institutional Review Board (IRB approval numbers 19021801 and 2005819),
-3. Compliance with the Japanese Act on the Protection of Personal Information
-   and other applicable regulations.
+- clinical baseline characteristics, disease activity and medication
+- CT-derived GMM tissue fractions and lung volume, per scan with days from BAL (the DICOM images are not shared)
+- BAL and serum cytokine concentrations (41-plex)
+- BAL and peripheral blood flow cytometry (gated proportions)
+- pulmonary function test series
+- infection events and follow-up (as days from the BAL date)
 
-Requests should describe the proposed research question, the variables
-required, and the expected use of the data.
+These data are available **from the corresponding author on reasonable request to
+qualified investigators under a data sharing agreement**. No costs are associated
+with accessing these data. The study was approved by the Nagasaki University
+Hospital Institutional Review Board (approval numbers 19021801 and 20051819).
 
-## 3. External reference cohorts
+Requests should describe the research question, the variables required and the
+intended use. The files are de-identified: they carry study identifiers only (no
+names, dates of birth, record numbers or calendar dates), use English column
+names, and give all clinical times, including the CT scans (`Days_from_BAL` in the
+per-scan CT table), only as days from the BAL date. The files the scripts expect
+are listed in [`../data_examples/README.md`](../data_examples/README.md).
+
+## 4. External reference cohort
 
 | Resource | Reference | Notes |
 |---|---|---|
-| Healthy serum cytokine reference (n = 101) | Saza cohort; see Fukui et al., Drug Discov Ther 2026 (manuscript ref 21) | Aggregate statistics used in the manuscript; raw values restricted |
-| Public RA-related microbiome / immune datasets | See manuscript Discussion (Scher 2016, Lou 2022) | Public per source repositories |
+| Healthy serum cytokine reference (n = 101, Saza cohort) | Supplementary Methods ref. 5: Fukui S et al., Drug Discov Ther 2026;20:190–198 | Median and 95% reference interval shown in Supplementary Table 1 and Supplementary Fig. 2; individual values not distributed |
 
-## 4. Reproducing the manuscript results (processed n = 35 dataset)
+## 5. Reproducing the results
 
-The analysis code is written to run on the **processed, de-identified n = 35
-dataset** (24 rheumatoid arthritis, 11 sarcoidosis). Patient-level raw data are
-**not distributed**; only the minimal processed data required to reproduce the
-figures, tables, and reported statistics is made available, under the access
-model below.
+The scripts in `scripts/` produce the figures and tables of the article on the 31
+analysed patients (24 RA, 7 sarcoidosis) from the processed individual-level data
+listed in `../data_examples/README.md`. Result tables and
+figure panels are regenerated by the scripts and are not committed, except the
+gene- and term-level tables in `results/`. `scripts/README.md` maps every item of
+the article to the script and output file that produce it.
 
-| Component needed to reproduce | Access |
-|---|---|
-| BAL RNA-seq counts (n = 35, de-identified IDs `RA#` / `Sarcoidosis#`) | **Open** — GEO GSE329884 (public 2027-05-02) |
-| 16S microbiome sequences | **Open** — SRA PRJNA1462027 |
-| Patient-level clinical metadata, BAL/serum cytokines, BAL/PB flow cytometry, CT-derived tissue fractions, infection outcomes | **Controlled access on request** (see Section 2) |
-| Analysis code | **Open** — this repository (`scripts/`), MIT License |
+## 6. Contact
 
-- Processed result tables (CSV) and figure panels (PNG/PDF) are regenerated by
-  running the scripts; they are **not** committed here (file size + they are
-  derivatives of the controlled-access patient-level data).
-- The journal "Source Data" file (per-figure underlying numbers) is provided
-  with the manuscript submission for the values shown in each figure panel.
-
-### Policy note
-This managed/controlled-access arrangement for individual-level human-subjects
-data is consistent with the journal data-availability policy, which
-permits access restrictions for sensitive patient data provided (i) a clear
-data-availability statement specifies the access conditions, and (ii) the data
-underlying the findings are made available to the editors and peer reviewers
-during review. During peer review the corresponding author will provide the
-underlying patient-level data to the editors/referees on request; after
-publication the same data are available to qualified investigators under the
-conditions in Section 2.
-
-## 5. Contact
-
-- Corresponding author: Naoki Hosogaya, M.D., Ph.D.
-- Affiliation: Clinical Research Center, Nagasaki University Hospital
-- For data access requests, please email the corresponding author and include
-  "BAL multi-omics data request" in the subject line.
+- Corresponding author: Naoki Hosogaya, M.D., Ph.D., Clinical Research Center,
+  Nagasaki University Hospital
+- Please include "BAL multi-omics data request" in the subject line.

@@ -1,43 +1,43 @@
-# R packages used in the analysis pipeline
-# (R >= 4.3 recommended; tested on macOS / Linux)
+# R packages used in the analysis code
+# Tested with R 4.5.0 (2025-04-11) on macOS; versions in brackets are those of the tested installation.
 #
-# To install all CRAN + Bioconductor packages, run scripts/install_dependencies.R
+# To install all packages, run scripts/install_dependencies.R
 
 # --- CRAN ---
-tidyverse                # data wrangling and plotting (includes ggplot2, dplyr, tibble, tidyr, readr, purrr)
-patchwork                # composing ggplot2 figures
-ggrepel                  # non-overlapping labels in ggplot2
-pheatmap                 # heatmaps
-corrplot                 # correlation plots
-gridExtra                # grid layouts
-openxlsx                 # read/write Excel
-readxl                   # read Excel
-pROC                     # ROC analysis
-randomForest             # random forest classifier
-caret                    # cross-validation utilities
-glmnet                   # penalized regression
-effsize                  # Cliff's delta effect size
-vegan                    # PERMANOVA, microbiome diversity metrics
+tidyverse                # data wrangling and plotting (ggplot2, dplyr, tidyr, readr, purrr, forcats) [2.0.0]
+patchwork                # composing ggplot2 figures [1.3.2]
+ggrepel                  # non-overlapping labels [0.9.6]
+readxl                   # read Excel [1.4.5]
+jsonlite                 # panel_map.json, GMM json [2.0.0]
+png                      # pixel-size checks of saved panels [0.1.8]
+magick                   # pixel-size checks of saved panels [2.9.0]
+pROC                     # ROC analysis, bootstrap CI, DeLong test [1.19.0.1]
+survival                 # Cox model, Kaplan-Meier (recommended package) [3.8.6]
+coxphf                   # Firth Cox model (optional check in 08b) [1.13.4]
+logistf                  # Firth penalized logistic regression [1.26.1]
+ppcor                    # partial Spearman correlation [1.1]
+DescTools                # Lin's concordance correlation coefficient [0.99.60]
+effsize                  # Cliff's delta [0.8.1]
+vegan                    # PERMANOVA, diversity [2.7.2]
 future                   # parallelization
-reticulate               # R <-> Python bridge (used by MOFA2 and BayesPrism)
+reticulate               # R <-> Python bridge (MOFA2 backend) [1.44.1]
 hdf5r                    # HDF5 file I/O
-devtools                 # for installing GitHub packages
+devtools                 # installing GitHub packages
+Seurat                   # scRNA-seq reference (v5) [5.4.0]
+harmony                  # batch integration [1.2.4]
 
-# --- Bioconductor (install via BiocManager::install) ---
+# --- Bioconductor (BiocManager::install) ---
 BiocManager
-DESeq2                   # differential expression
-apeglm                   # log fold-change shrinkage
-edgeR                    # alternative DEG (validation)
-clusterProfiler          # pathway enrichment
+DESeq2                   # differential expression; lfcShrink type = "normal" [1.48.2]
+edgeR                    # log-CPM [4.6.3]
+clusterProfiler          # GSEA (gseGO, gseKEGG) [4.16.0]
+fgsea                    # GSEA backend
 AnnotationDbi
-org.Hs.eg.db             # human gene annotations
-biomaRt                  # gene ID mapping
-GSVA                     # gene set variation analysis
+org.Hs.eg.db             # human gene annotation
+GSVA                     # GSVA gene-set scores of the GO BP OXPHOS and surfactant sets (17) [2.2.1]
+msigdbr                  # MSigDB gene sets (C5 GO:BP) for 17 [25.1.1]
 SingleCellExperiment
+MOFA2                    # multi-omics factor analysis (Python backend mofapy2) [1.18.0]
 
-# --- GitHub / specialized ---
-Seurat                   # scRNA-seq (CRAN; Seurat v4)
-harmony                  # batch integration (CRAN; immunogenomics/harmony)
-MOFA2                    # multi-omics factor analysis (Bioconductor; reticulate-based Python backend)
-BayesPrism               # bulk RNA-seq deconvolution (https://github.com/Danko-Lab/BayesPrism)
-fgsea                    # fast GSEA (Bioconductor)
+# --- GitHub ---
+BayesPrism               # bulk deconvolution, https://github.com/Danko-Lab/BayesPrism [2.2.2]

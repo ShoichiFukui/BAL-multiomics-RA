@@ -16,9 +16,8 @@ DCMDT/
 CT_GMM_score/
 data/raw/
 data/processed/
-output_v3_BayesPrism/*.rds
-output_v3_BayesPrism/*.RData
-results/*.RData
+output_BayesPrism/*.rds
+output_BayesPrism/*.RData
 results/*.RData
 *.tsv
 patient_data/
@@ -50,9 +49,8 @@ __pycache__/
 results/panels/
 results/figures/
 results/tables/
-output_v3_BayesPrism/
+output_BayesPrism/
 analysis/
-FINAL_*/
 
 # OS / editor
 .DS_Store
@@ -74,4 +72,3 @@ manuscript&figures/
 
 # Slicer Documents output (adjust to your local CT_results path)
 CT_results/
-PUBLIC_CODE_v75_MAPPING_20260625.md

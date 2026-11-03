@@ -5,8 +5,8 @@ title: >
 message: >
   If you use this software, please cite both the manuscript and this software.
 type: software
-version: "1.1.2"
-date-released: "2026-07-13"
+version: "1.2.0"
+date-released: "2026-11-03"
 authors:
   - family-names: Fukui
     given-names: Shoichi
@@ -25,16 +25,41 @@ preferred-citation:
       given-names: Shoichi
     - family-names: Hosogaya
       given-names: Naoki
-  journal: ""  # manuscript under review
+    - family-names: Nakada
+      given-names: Nana
+    - family-names: Sasaki
+      given-names: Daisuke
+    - family-names: Kurushima
+      given-names: Shota
+    - family-names: Koga
+      given-names: Tomohiro
+    - family-names: Iwanaga
+      given-names: Naoki
+    - family-names: Takazono
+      given-names: Takahiro
+    - family-names: Ishimoto
+      given-names: Hiroshi
+    - family-names: Sakamoto
+      given-names: Noriho
+    - family-names: Izumikawa
+      given-names: Koichi
+    - family-names: Yanagihara
+      given-names: Katsunori
+    - family-names: Yamamoto
+      given-names: Kazuko
+    - family-names: Kawakami
+      given-names: Atsushi
+    - family-names: Mukae
+      given-names: Hiroshi
   year: 2026
-  status: "Under review"
+  status: submitted
 keywords:
   - rheumatoid arthritis
   - bronchoalveolar lavage
   - multi-omics
   - Th17
   - interstitial lung disease
-  - infection prediction
+  - respiratory infection
   - MOFA2
   - BayesPrism
 license: MIT

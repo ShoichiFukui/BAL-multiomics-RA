@@ -1,0 +1,38 @@
+# R package versions of the environment in which the scripts were run and checked against the article (R version 4.5.0 (2025-04-11), Darwin)
+# R 4.5.0
+tidyverse              2.0.0
+patchwork              1.3.2
+ggrepel                0.9.6
+msigdbr                25.1.1
+readxl                 1.4.5
+pROC                   1.19.0.1
+effsize                0.8.1
+vegan                  2.7.2
+future                 1.69.0
+reticulate             1.44.1
+hdf5r                  1.3.12
+devtools               2.4.6
+BiocManager            1.30.27
+Seurat                 5.4.0
+harmony                1.2.4
+survival               3.8.6
+coxphf                 1.13.4
+logistf                1.26.1
+ppcor                  1.1
+DescTools              0.99.60
+jsonlite               2.0.0
+png                    0.1.8
+magick                 2.9.0
+DESeq2                 1.48.2
+edgeR                  4.6.3
+clusterProfiler        4.16.0
+AnnotationDbi          1.70.0
+org.Hs.eg.db           3.21.0
+GSVA                   2.2.1
+SingleCellExperiment   1.30.1
+MOFA2                  1.18.0
+fgsea                  1.34.2
+BayesPrism             2.2.2
+ggplot2                4.0.2
+dplyr                  1.2.0
+mofapy2                0.7.4   (Python 3.9.6, MOFA2 backend)

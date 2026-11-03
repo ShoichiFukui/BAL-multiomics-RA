@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Lung CT GMM Batch Analysis v3
-  - Multiple study dates per folder supported
+Lung CT GMM Batch Analysis
+  - Multiple studies (time points) per folder supported
   - Verification images output
+  - De-identified outputs: each input folder should be named by a de-identified case key; the studies of a folder are
+    numbered T1, T2, ... in chronological order and outputs are named <case key>_T<k>. No study date, patient age,
+    patient name, ID, birth date, institution or DICOM UID is written to any output.
   - Auto-selects: thin slice (1mm) + lung kernel + non-contrast per date
   - Lung segmentation: Lungmask AI (U-net R231)
   - Tissue classification: Zaffino et al. 2021 GMM (5 components)
@@ -13,7 +16,7 @@ import numpy as np
 from datetime import datetime
 
 INPUT_DIR = "/tmp/ILD_Data"
-OUTPUT_DIR = "/tmp/CT_results/gmm_v3"
+OUTPUT_DIR = "/tmp/CT_results/gmm"
 
 GMM_N_COMPONENTS = 5
 GMM_COVARIANCE_TYPE = "full"
@@ -26,7 +29,6 @@ MEDIAN_FILTER_SIZE = 4
 TISSUE_NAMES = ["Air", "Healthy_Lung", "GGO", "Consolidation", "Dense_Tissue"]
 LUNG_KERNELS = ["FC51", "FC52", "I70f", "LUNG"]
 N_VERIFY_SLICES = 5
-
 
 def find_dicom_patients(input_dir):
     patients = []
@@ -42,23 +44,19 @@ def find_dicom_patients(input_dir):
                 patients.append({"name": item, "path": dcmdt_path, "n_slices": len(dcm_files)})
     return patients
 
-
 def is_lung_kernel(kernel_str):
     kernel_str = str(kernel_str).upper()
     for lk in LUNG_KERNELS:
         if lk.upper() in kernel_str: return True
     return False
 
-
 def is_thin_slice(thickness_str):
     try: return float(str(thickness_str).strip()) <= 1.5
     except: return False
 
-
 def is_contrast(desc_str):
     desc = str(desc_str).upper()
     return ",CE," in f",{desc}," or desc.startswith("CE,")
-
 
 def find_study_dates(dicom_dir):
     import pydicom
@@ -72,7 +70,6 @@ def find_study_dates(dicom_dir):
             if d: dates.add(d)
         except: pass
     return sorted(dates)
-
 
 def select_best_series_for_date(dicom_dir, target_date):
     import pydicom, SimpleITK as sitk
@@ -117,12 +114,11 @@ def select_best_series_for_date(dicom_dir, target_date):
     image = reader2.Execute()
     volume_array = sitk.GetArrayFromImage(image)
     print(f"  Volume: {volume_array.shape}, spacing={image.GetSpacing()}")
-    series_info = {"series_uid": best["sid"], "n_slices": best["n"],
+    series_info = {"n_slices": best["n"],
                    "slice_thickness": best["thick"], "kernel": best["kernel"],
                    "description": best["desc"], "contrast": best["is_ce"],
-                   "study_date": target_date, "n_candidate_series": len(candidates)}
+                   "n_candidate_series": len(candidates)}   # no series UID or study date in the output
     return image, volume_array, series_info
-
 
 def segment_lungs_ai(image):
     from lungmask import LMInferer
@@ -135,7 +131,6 @@ def segment_lungs_ai(image):
     n_left = int(np.sum(segmentation == 2))
     print(f"  Lung voxels: {n_total:,} (R: {n_right:,}, L: {n_left:,})")
     return lung_mask, segmentation, {"total": n_total, "right": n_right, "left": n_left}
-
 
 def run_gmm(volume_array, lung_mask):
     from sklearn.mixture import GaussianMixture
@@ -173,7 +168,6 @@ def run_gmm(volume_array, lung_mask):
                 "n_iter": int(gmm.n_iter_), "fit_time_s": round(fit_time, 1)}
     return label_map, TISSUE_NAMES, gmm_info
 
-
 def compute_statistics(volume_array, label_map, lung_mask, tissue_names, spacing, lung_voxel_info):
     voxel_vol_cm3 = (spacing[0] * spacing[1] * spacing[2]) / 1000.0
     result = {}; total_vol = 0
@@ -200,7 +194,6 @@ def compute_statistics(volume_array, label_map, lung_mask, tissue_names, spacing
     result["spacing_z_mm"] = round(spacing[2], 4)
     result["voxel_vol_mm3"] = round(spacing[0] * spacing[1] * spacing[2], 4)
     return result
-
 
 def save_verification_images(volume_array, label_map, lung_mask, output_name, output_dir):
     import matplotlib
@@ -282,7 +275,6 @@ def save_verification_images(volume_array, label_map, lung_mask, output_name, ou
 
     print(f"  Verification images: {len(slice_indices)} PNGs saved")
 
-
 def save_patient_results(result, output_name, output_dir, gmm_info=None,
                          label_map=None, image=None, series_info=None):
     import SimpleITK as sitk
@@ -299,7 +291,7 @@ def save_patient_results(result, output_name, output_dir, gmm_info=None,
                  "output_name": output_name,
                  "analysis_date": datetime.now().isoformat(),
                  "results": {k: v for k, v in result.items()
-                             if k not in ("patient","folder_name","study_date","output_name")}}
+                             if k not in ("patient","folder_name","timepoint","output_name")}}
     with open(os.path.join(pt_dir, "gmm_results.json"), 'w', encoding='utf-8') as f:
         json.dump(json_data, f, indent=2, ensure_ascii=False)
     with open(os.path.join(pt_dir, "segment_statistics.csv"), 'w', newline='', encoding='utf-8') as f:
@@ -314,16 +306,13 @@ def save_patient_results(result, output_name, output_dir, gmm_info=None,
         sitk.WriteImage(label_image, os.path.join(pt_dir, "gmm_labelmap.nii.gz"))
     print(f"  Saved to: {pt_dir}")
 
-
 def collect_dicom_metadata(patients, output_dir):
     import pydicom
     print("\nCollecting DICOM metadata...")
-    # De-identified by default: direct identifiers (PatientName, PatientID,
-    # PatientBirthDate, InstitutionName) are intentionally NOT extracted, so this
-    # public pipeline never emits patient-identifying information. Only
-    # acquisition/technical metadata (scanner, model, modality) is collected.
+    # De-identified: patient name, ID, birth date, age, study date, institution and UIDs are NOT written.
+    # The study date is read only to match the files of each time point; outputs carry the case key and T<k>.
+    # Collected: sex and acquisition/technical metadata (study description, modality, manufacturer, model).
     tags = [("PatientSex",0x0010,0x0040),
-            ("PatientAge",0x0010,0x1010),("StudyDate",0x0008,0x0020),
             ("StudyDescription",0x0008,0x1030),("Modality",0x0008,0x0060),
             ("Manufacturer",0x0008,0x0070),("ManufacturerModelName",0x0008,0x1090)]
     rows = []
@@ -331,7 +320,8 @@ def collect_dicom_metadata(patients, output_dir):
         dcm_files = [f for f in os.listdir(p["path"]) if not f.startswith('.')]
         if not dcm_files: continue
         dates = find_study_dates(p["path"])
-        for d in dates:
+        for k, d in enumerate(dates):
+            tp = f"T{k+1}"
             for f in dcm_files:
                 try:
                     ds = pydicom.dcmread(os.path.join(p["path"], f), stop_before_pixels=True)
@@ -339,27 +329,26 @@ def collect_dicom_metadata(patients, output_dir):
                     if charset: ds.SpecificCharacterSet = charset.value
                     sd = str(ds.get((0x0008,0x0020), {}).value) if ds.get((0x0008,0x0020)) else ""
                     if sd != d: continue
-                    row = {"folder_name": p["name"], "study_date": d,
-                           "output_name": f"{p['name']}_{d}"}
+                    row = {"folder_name": p["name"], "timepoint": tp,
+                           "output_name": f"{p['name']}_{tp}"}
                     for tag_name, g, e in tags:
                         elem = ds.get((g,e), None)
                         row[tag_name] = str(elem.value) if elem is not None else ""
                     rows.append(row)
-                    print(f"  {row['output_name']} / {d}")
+                    print(f"  {row['output_name']}")
                     break
                 except: pass
-    fieldnames = ["folder_name", "study_date", "output_name"] + [t[0] for t in tags]
+    fieldnames = ["folder_name", "timepoint", "output_name"] + [t[0] for t in tags]
     metadata_csv = os.path.join(output_dir, "dicom_metadata.csv")
     with open(metadata_csv, 'w', newline='', encoding='utf-8-sig') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader(); writer.writerows(rows)
     print(f"  dicom_metadata.csv: {metadata_csv}")
 
-
-def process_one_study(folder_name, dicom_dir, study_date, output_dir):
-    output_name = f"{folder_name}_{study_date}"
+def process_one_study(folder_name, dicom_dir, study_date, output_dir, timepoint):
+    output_name = f"{folder_name}_{timepoint}"   # case key + time point; the study date selects the series only
     print(f"\n{'='*60}")
-    print(f"  {output_name} (folder={folder_name}, date={study_date})")
+    print(f"  {output_name}")
     print(f"{'='*60}")
     t0 = time.time()
 
@@ -381,7 +370,7 @@ def process_one_study(folder_name, dicom_dir, study_date, output_dir):
     spacing = image.GetSpacing()
     result = compute_statistics(volume_array, label_map, lung_mask, tissue_names, spacing, lung_voxel_info)
     result["folder_name"] = folder_name
-    result["study_date"] = study_date
+    result["timepoint"] = timepoint
     result["output_name"] = output_name
     result["series_kernel"] = series_info["kernel"]
     result["series_thickness"] = series_info["slice_thickness"]
@@ -404,9 +393,8 @@ def process_one_study(folder_name, dicom_dir, study_date, output_dir):
     print(f"  Time: {elapsed:.1f}s")
     return result
 
-
 def main():
-    parser = argparse.ArgumentParser(description="Lung GMM v3 (Multi-date + Verification)")
+    parser = argparse.ArgumentParser(description="Lung GMM (Multi-date + Verification)")
     parser.add_argument("--test", action="store_true", help="Process only the first folder")
     parser.add_argument("--patient", type=str, help="Specific folder name")
     parser.add_argument("--input", type=str, default=INPUT_DIR)
@@ -415,7 +403,7 @@ def main():
     input_dir = args.input; output_dir = args.output; os.makedirs(output_dir, exist_ok=True)
 
     print("="*60)
-    print("  Lung CT GMM Batch Analysis v3 (Multi-date + Verify)")
+    print("  Lung CT GMM Batch Analysis (Multi-date + Verify)")
     print("  Series: 1mm + Lung kernel + non-CE preferred")
     print("  Segmentation: Lungmask AI (U-net R231)")
     print("  Classification: GMM 5-component (Zaffino 2021)")
@@ -432,9 +420,9 @@ def main():
     tasks = []
     for p in patients:
         dates = find_study_dates(p["path"])
-        for d in dates:
-            tasks.append({"folder_name": p["name"], "path": p["path"], "date": d})
-        print(f"  {p['name']}: {len(dates)} date(s) -> {', '.join(dates)}")
+        for k, d in enumerate(dates):
+            tasks.append({"folder_name": p["name"], "path": p["path"], "date": d, "timepoint": f"T{k+1}"})
+        print(f"  {p['name']}: {len(dates)} time point(s)")
 
     print(f"\nTotal tasks: {len(tasks)} studies across {len(patients)} folders\n")
 
@@ -444,12 +432,12 @@ def main():
     for i, task in enumerate(tasks):
         print(f"\n>>> [{i+1}/{len(tasks)}]")
         try:
-            result = process_one_study(task["folder_name"], task["path"], task["date"], output_dir)
+            result = process_one_study(task["folder_name"], task["path"], task["date"], output_dir, task["timepoint"])
             if result: all_results.append(result)
-            else: skipped.append(f"{task['folder_name']}_{task['date']}")
+            else: skipped.append(f"{task['folder_name']}_{task['timepoint']}")
         except Exception as e:
             print(f"\n  ERROR: {e}"); import traceback; traceback.print_exc()
-            skipped.append(f"{task['folder_name']}_{task['date']}")
+            skipped.append(f"{task['folder_name']}_{task['timepoint']}")
 
     total_elapsed = time.time() - total_start
 
@@ -460,7 +448,7 @@ def main():
 
     if all_results:
         summary_path = os.path.join(output_dir, "batch_summary.csv")
-        columns = ["output_name", "folder_name", "study_date",
+        columns = ["output_name", "folder_name", "timepoint",
                     "Air_cm3","Healthy_Lung_cm3","GGO_cm3","Consolidation_cm3","Dense_Tissue_cm3","total_lung_cm3",
                     "Air_pct","Healthy_Lung_pct","GGO_pct","Consolidation_pct","Dense_Tissue_pct","lung_involvement_pct",
                     "lung_mean_HU","lung_median_HU","lung_std_HU",
@@ -473,11 +461,11 @@ def main():
             writer.writeheader(); writer.writerows(all_results)
         print(f"\n  batch_summary.csv: {summary_path}")
 
-        print(f"\n  {'Output':25s} {'Date':>10s} {'Involve%':>9s} {'Healthy%':>9s} "
+        print(f"\n  {'Output':25s} {'Time':>10s} {'Involve%':>9s} {'Healthy%':>9s} "
               f"{'GGO%':>7s} {'Kernel':>10s} {'CE':>5s}")
         print(f"  {'-'*80}")
         for r in all_results:
-            print(f"  {r['output_name']:25s} {r.get('study_date',''):>10s} "
+            print(f"  {r['output_name']:25s} {r.get('timepoint',''):>10s} "
                   f"{r.get('lung_involvement_pct',0):8.1f}% "
                   f"{r.get('Healthy_Lung_pct',0):8.1f}% "
                   f"{r.get('GGO_pct',0):6.1f}% "
